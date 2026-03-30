@@ -1,19 +1,3 @@
----
-title: Cloud Chaos SRE
-emoji: ☁️
-colorFrom: blue
-colorTo: red
-sdk: docker
-pinned: false
-tags:
-  - openenv
-  - sre
-  - reinforcement-learning
-  - agent-evaluation
-  - infrastructure
-  - operations
----
-
 # ☁️ Cloud Chaos SRE — OpenEnv Environment
 
 > An OpenEnv-compliant reinforcement learning environment that simulates a real-world **Site Reliability Engineer (SRE)** managing a virtual data centre under active production incidents.

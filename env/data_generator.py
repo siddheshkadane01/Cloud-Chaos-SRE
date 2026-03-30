@@ -133,6 +133,11 @@ def _make_hard(index: int) -> dict:
         state[svc]["error_rate"] = round(random.uniform(0.25, 0.55), 4)
         state[svc]["latency_ms"] = round(random.uniform(1200.0, 2600.0), 2)
 
+    state["db-proxy"]["cpu_pct"] = round(random.uniform(80.0, 93.0), 2)
+    state["db-proxy"]["mem_pct"] = round(random.uniform(75.0, 90.0), 2)
+    state["db-proxy"]["error_rate"] = round(random.uniform(0.22, 0.45), 4)
+    state["db-proxy"]["latency_ms"] = round(random.uniform(1400.0, 2600.0), 2)
+
     deploy_history = [
         {
             "deploy_id": "d001",

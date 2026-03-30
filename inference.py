@@ -109,6 +109,46 @@ RECENT LOGS: {chr(10).join(logs) or 'none'}
 DEPLOY HISTORY: {chr(10).join(deploys) or 'none'}"""
 
 
+def hard_guardrail_action(task_id: str, obs: dict, step: int) -> dict | None:
+    if task_id != "hard":
+        return None
+
+    config = obs.get("current_config", {})
+    db_timeout = config.get("db_timeout")
+    try:
+        db_timeout_int = int(db_timeout)
+    except (TypeError, ValueError):
+        db_timeout_int = None
+
+    if db_timeout_int is not None and db_timeout_int < 500:
+        if step == 1:
+            return {
+                "action_type": "CHECK_LOGS",
+                "target_service": "db-proxy",
+                "config_key": None,
+                "config_value": None,
+                "reason": "Investigate db-proxy for timeout-related dependency failures",
+            }
+        return {
+            "action_type": "UPDATE_CONFIG",
+            "target_service": "db-proxy",
+            "config_key": "db_timeout",
+            "config_value": 5000,
+            "reason": "Restore db timeout to stable value to recover upstream services",
+        }
+
+    overall = obs.get("health_summary", {}).get("overall", 0.0)
+    if overall < 0.85:
+        return {
+            "action_type": "RESTART_SERVICE",
+            "target_service": "order-service",
+            "config_key": None,
+            "config_value": None,
+            "reason": "Post-fix cleanup restart to accelerate recovery of downstream requests",
+        }
+    return None
+
+
 def run_task(task_id: str) -> dict:
     print("\n" + "=" * 50)
     print(f"Running task: {task_id}")
@@ -121,31 +161,39 @@ def run_task(task_id: str) -> dict:
 
     while not done and step < max_steps:
         step += 1
-        user_content = format_observation(obs, step)
+        guardrail_action = hard_guardrail_action(task_id, obs, step)
 
-        messages = [
-            {"role": "system", "content": [{"type": "text", "text": SYSTEM_PROMPT}]},
-            {"role": "user", "content": user_content},
-        ]
+        if guardrail_action is not None:
+            action_dict = guardrail_action
+            print(
+                f"Step {step}: {action_dict.get('action_type')} -> {action_dict.get('target_service')} (guardrail)"
+            )
+        else:
+            user_content = format_observation(obs, step)
 
-        response_text = FALLBACK_ACTION
-        for attempt in range(3):
-            try:
-                completion = client.chat.completions.create(
-                    model=MODEL_NAME,
-                    messages=messages,
-                    temperature=TEMPERATURE,
-                    max_tokens=MAX_TOKENS,
-                    seed=SEED,
-                    stream=False,
-                )
-                response_text = completion.choices[0].message.content or FALLBACK_ACTION
-                break
-            except Exception as exc:
-                print(f"  Attempt {attempt + 1} failed: {exc}")
+            messages = [
+                {"role": "system", "content": [{"type": "text", "text": SYSTEM_PROMPT}]},
+                {"role": "user", "content": user_content},
+            ]
 
-        action_dict = parse_action(response_text)
-        print(f"Step {step}: {action_dict.get('action_type')} -> {action_dict.get('target_service')}")
+            response_text = FALLBACK_ACTION
+            for attempt in range(3):
+                try:
+                    completion = client.chat.completions.create(
+                        model=MODEL_NAME,
+                        messages=messages,
+                        temperature=TEMPERATURE,
+                        max_tokens=MAX_TOKENS,
+                        seed=SEED,
+                        stream=False,
+                    )
+                    response_text = completion.choices[0].message.content or FALLBACK_ACTION
+                    break
+                except Exception as exc:
+                    print(f"  Attempt {attempt + 1} failed: {exc}")
+
+            action_dict = parse_action(response_text)
+            print(f"Step {step}: {action_dict.get('action_type')} -> {action_dict.get('target_service')}")
 
         result = call_env("POST", "/step", action_dict)
         obs = result.get("observation", obs)

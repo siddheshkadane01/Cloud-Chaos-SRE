@@ -14,6 +14,7 @@ class SREEnvironment:
         self._state: EpisodeState | None = None
         self._vdc: VirtualDataCentre | None = None
         self._prev_health: float = 0.0
+        self._prev_mean_latency: float = 0.0
 
     def reset(self, task_id: str, scenario_id: str | None = None) -> Observation:
         scenarios = list((SCENARIOS_DIR / task_id).glob("*.json"))
@@ -29,6 +30,7 @@ class SREEnvironment:
         self._vdc = VirtualDataCentre(scenario)
         obs = self._build_observation(task_id, 0, scenario["scenario_id"])
         self._prev_health = obs.health_summary.overall
+        self._prev_mean_latency = sum(obs.metrics.latency_ms.values()) / max(len(obs.metrics.latency_ms), 1)
 
         self._state = EpisodeState(
             task_id=task_id,
@@ -64,15 +66,27 @@ class SREEnvironment:
         health_delta = new_health - self._prev_health
         self._prev_health = new_health
 
+        new_mean_latency = sum(obs.metrics.latency_ms.values()) / max(len(obs.metrics.latency_ms), 1)
+        latency_delta_norm = max(-1.0, min(1.0, (self._prev_mean_latency - new_mean_latency) / 400.0))
+        self._prev_mean_latency = new_mean_latency
+
         cost_efficiency = -0.05 if action.action_type.value == "SCALE_UP" else 0.0
-        latency_penalty = 0.0 if result["valid"] else 0.0
-        invalid_penalty = 0.0 if result["valid"] else 0.10
+        repeated_action_penalty = 0.0
+        if self._state.action_history:
+            last = self._state.action_history[-1]
+            if (
+                last.get("action_type") == action.action_type.value
+                and last.get("target_service") == action.target_service
+            ):
+                repeated_action_penalty = 0.05
+        invalid_penalty = 0.0 if result["valid"] else 0.25
 
         raw_reward = (
-            health_delta * 0.50
-            + cost_efficiency * 0.20
-            - latency_penalty * 0.20
-            - invalid_penalty * 0.10
+            health_delta * 0.55
+            + cost_efficiency * 0.10
+            + latency_delta_norm * 0.30
+            - invalid_penalty * 0.30
+            - repeated_action_penalty * 0.10
         )
         step_reward = round(max(-1.0, min(1.0, raw_reward)), 4)
 
@@ -98,10 +112,10 @@ class SREEnvironment:
             step_reward=step_reward,
             cumulative=round(self._state.cumulative_reward, 4),
             breakdown=RewardBreakdown(
-                health_delta=round(health_delta * 0.50, 4),
-                cost_efficiency=round(cost_efficiency * 0.20, 4),
-                latency_delta=round(-latency_penalty * 0.20, 4),
-                invalid_penalty=round(-invalid_penalty * 0.10, 4),
+                health_delta=round(health_delta * 0.55, 4),
+                cost_efficiency=round(cost_efficiency * 0.10, 4),
+                latency_delta=round(latency_delta_norm * 0.30, 4),
+                invalid_penalty=round(-(invalid_penalty * 0.30 + repeated_action_penalty * 0.10), 4),
             ),
         )
 

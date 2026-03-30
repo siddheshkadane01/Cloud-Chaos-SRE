@@ -89,11 +89,30 @@ class VirtualDataCentre:
             return result
 
         if action_type == "CHECK_LOGS":
-            self._add_log(target, "INFO", f"Log fetch requested for {target}")
-            result["details"] = f"Retrieved logs for {target}"
+            # Add deterministic diagnostic clues for hard scenarios.
+            if target == "db-proxy" and int(self.config.get("db_timeout", 5000)) < 500:
+                self._add_log(
+                    target,
+                    "ERROR",
+                    f"Database timeout misconfigured: db_timeout={self.config.get('db_timeout')}ms causing upstream request failures",
+                )
+                result["details"] = "Retrieved logs for db-proxy: db timeout appears misconfigured"
+            elif target in ["order-service", "user-service", "auth-service"] and int(self.config.get("db_timeout", 5000)) < 500:
+                self._add_log(
+                    target,
+                    "WARN",
+                    "Frequent dependency timeout from db-proxy; check database client timeout configuration",
+                )
+                result["details"] = f"Retrieved logs for {target}: dependency timeout errors observed"
+            else:
+                self._add_log(target, "INFO", f"Log fetch requested for {target}")
+                result["details"] = f"Retrieved logs for {target}"
 
         elif action_type == "INSPECT_SERVICE":
-            result["details"] = f"Inspected {target}: {self.state[target]}"
+            if target == "db-proxy":
+                result["details"] = f"Inspected db-proxy: {self.state[target]}, db_timeout={self.config.get('db_timeout')}"
+            else:
+                result["details"] = f"Inspected {target}: {self.state[target]}"
 
         elif action_type == "RESTART_SERVICE":
             svc = self.state[target]
@@ -172,12 +191,18 @@ class VirtualDataCentre:
         db_timeout = self.config.get("db_timeout", 5000)
         if db_timeout < 500:
             for svc in ["order-service", "user-service", "auth-service"]:
-                self.state[svc]["error_rate"] = min(1.0, self.state[svc]["error_rate"] + 0.3)
-                self.state[svc]["latency_ms"] = min(5000.0, self.state[svc]["latency_ms"] * 2.0)
+                self.state[svc]["error_rate"] = min(1.0, self.state[svc]["error_rate"] + 0.35)
+                self.state[svc]["latency_ms"] = min(5000.0, self.state[svc]["latency_ms"] * 2.2)
+            self.state["db-proxy"]["error_rate"] = min(1.0, self.state["db-proxy"]["error_rate"] + 0.20)
+            self.state["db-proxy"]["latency_ms"] = min(5000.0, self.state["db-proxy"]["latency_ms"] * 1.6)
+            self.state["api-gateway"]["latency_ms"] = min(5000.0, self.state["api-gateway"]["latency_ms"] * 1.25)
         else:
             for svc in ["order-service", "user-service", "auth-service"]:
-                self.state[svc]["error_rate"] = max(0.0, self.state[svc]["error_rate"] - 0.25)
-                self.state[svc]["latency_ms"] = max(50.0, self.state[svc]["latency_ms"] * 0.4)
+                self.state[svc]["error_rate"] = max(0.0, self.state[svc]["error_rate"] * 0.25)
+                self.state[svc]["latency_ms"] = max(40.0, self.state[svc]["latency_ms"] * 0.30)
+            self.state["db-proxy"]["error_rate"] = max(0.0, self.state["db-proxy"]["error_rate"] * 0.35)
+            self.state["db-proxy"]["latency_ms"] = max(30.0, self.state["db-proxy"]["latency_ms"] * 0.35)
+            self.state["api-gateway"]["latency_ms"] = max(40.0, self.state["api-gateway"]["latency_ms"] * 0.75)
 
     def _add_log(self, service: str, severity: str, message: str):
         self.logs.append(

@@ -100,30 +100,49 @@ def grade_hard(state: EpisodeState) -> tuple[float, dict]:
     correct_value = 5000
 
     breakdown = {
+        "diagnosis": 0.0,
         "correct_key": 0.0,
+        "value_progress": 0.0,
         "correct_value": 0.0,
         "health_restored": 0.0,
         "efficiency": 0.0,
     }
 
+    if any(
+        action.get("target_service") == "db-proxy"
+        and action.get("action_type") in {"CHECK_LOGS", "INSPECT_SERVICE"}
+        for action in state.action_history
+    ):
+        breakdown["diagnosis"] = 0.15
+
     for action in state.action_history:
-        if action.get("action_type") == "UPDATE_CONFIG":
-            if action.get("config_key") == correct_key:
-                breakdown["correct_key"] = 0.30
-                val = action.get("config_value")
-                if val is not None:
-                    try:
-                        if int(val) == correct_value:
-                            breakdown["correct_value"] = 0.40
-                    except (TypeError, ValueError):
-                        pass
-            break
+        if action.get("action_type") != "UPDATE_CONFIG":
+            continue
+        if action.get("config_key") != correct_key:
+            continue
+
+        breakdown["correct_key"] = 0.25
+        val = action.get("config_value")
+        if val is None:
+            continue
+        try:
+            val_int = int(val)
+        except (TypeError, ValueError):
+            continue
+
+        if val_int == correct_value:
+            breakdown["correct_value"] = 0.35
+            breakdown["value_progress"] = max(breakdown["value_progress"], 0.20)
+        elif 2500 <= val_int <= 8000:
+            breakdown["value_progress"] = max(breakdown["value_progress"], 0.15)
+        elif 1000 <= val_int < 2500:
+            breakdown["value_progress"] = max(breakdown["value_progress"], 0.08)
 
     final_health = state.observation.health_summary.overall
-    breakdown["health_restored"] = round(min(0.10, final_health * 0.10), 4)
+    breakdown["health_restored"] = round(min(0.03, final_health * 0.03), 4)
 
     if state.step <= 10 and breakdown["correct_value"] > 0:
-        breakdown["efficiency"] = 0.20
+        breakdown["efficiency"] = 0.02
 
     score = sum(breakdown.values())
     return round(min(1.0, score), 4), breakdown

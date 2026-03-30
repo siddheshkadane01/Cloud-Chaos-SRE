@@ -27,10 +27,10 @@
       "latency_ms": 2017.85
     },
     "db-proxy": {
-      "cpu_pct": 92.0,
-      "mem_pct": 88.0,
-      "error_rate": 0.45,
-      "latency_ms": 2100.0
+      "cpu_pct": 81.04,
+      "mem_pct": 77.79,
+      "error_rate": 0.3569,
+      "latency_ms": 2210.26
     },
     "cache-service": {
       "cpu_pct": 30.0,

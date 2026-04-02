@@ -1,4 +1,4 @@
-name: cloud-chaos-sre
+name: site-reliability-server
 version: 1.1.0
 description: >
   An OpenEnv environment simulating a Site Reliability Engineer managing
@@ -6,8 +6,8 @@ description: >
   diagnose and remediate memory leaks, traffic spikes, and hidden
   misconfigurations across six interdependent microservices.
 author:
-  name: Cloud Chaos SRE Team
-  email: cloudchaossre@protonmail.com
+  name: Site Reliability Server Team
+  email: sitereliabilityserver@protonmail.com
 
 tasks:
   - id: easy

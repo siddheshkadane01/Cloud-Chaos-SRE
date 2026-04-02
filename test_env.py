@@ -1,5 +1,5 @@
 """
-test_env.py — Smoke tests for Cloud Chaos SRE environment.
+test_env.py — Smoke tests for Site Reliability Server environment.
 Run with: pytest test_env.py -v
 """
 

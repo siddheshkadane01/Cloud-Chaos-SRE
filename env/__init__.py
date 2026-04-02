@@ -1,1 +1,1 @@
-"""Cloud Chaos SRE environment package."""
+"""Site Reliability Server environment package."""

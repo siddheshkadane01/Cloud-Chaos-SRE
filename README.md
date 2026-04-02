@@ -1,5 +1,5 @@
 ---
-title: Cloud Chaos SRE
+title: Site Reliability Server
 emoji: ☁️
 colorFrom: blue
 colorTo: red
@@ -14,7 +14,7 @@ tags:
   - operations
 ---
 
-# ☁️ Cloud Chaos SRE — OpenEnv Environment
+# ☁️ Site Reliability Server — OpenEnv Environment
 
 > An OpenEnv-compliant reinforcement learning environment that simulates a real-world **Site Reliability Engineer (SRE)** managing a virtual data centre under active production incidents.
 
@@ -31,9 +31,9 @@ tags:
 
 Every major technology company employs SRE teams who respond to production incidents around the clock. When a service goes down at 3 AM, an SRE must rapidly diagnose the root cause, take the correct remediation action, and restore system health — all while minimising cloud costs and avoiding collateral damage to healthy services.
 
-**Cloud Chaos SRE** models this exact workflow as an OpenEnv environment. An AI agent is placed inside a simulated virtual data centre running six interdependent microservices. The environment injects realistic incident scenarios — memory leaks, traffic spikes, cascading failures, and hidden misconfigurations — and the agent must investigate, reason, and act to restore the system to a healthy state.
+**Site Reliability Server** models this exact workflow as an OpenEnv environment. An AI agent is placed inside a simulated virtual data centre running six interdependent microservices. The environment injects realistic incident scenarios — memory leaks, traffic spikes, cascading failures, and hidden misconfigurations — and the agent must investigate, reason, and act to restore the system to a healthy state.
 
-This environment fills a genuine gap in the agent evaluation landscape. Existing benchmarks test code generation, question answering, and tool use in isolation. Cloud Chaos SRE tests **multi-step operational reasoning** under pressure, where each action has real consequences on the simulated system state.
+This environment fills a genuine gap in the agent evaluation landscape. Existing benchmarks test code generation, question answering, and tool use in isolation. Site Reliability Server tests **multi-step operational reasoning** under pressure, where each action has real consequences on the simulated system state.
 
 ### Why this environment matters
 
@@ -379,14 +379,14 @@ When baseline execution fails, the endpoint returns a structured payload with `o
 #### `GET /health`
 Health check endpoint for deployment validation.
 
-**Response**: `{ "status": "ok", "env": "cloud-chaos-sre", "version": "1.0.0" }`
+**Response**: `{ "status": "ok", "env": "site-reliability-server", "version": "1.0.0" }`
 
 ---
 
 ## Project Structure
 
 ```
-cloud-chaos-sre/
+site-reliability-server/
 ├── main.py                    # FastAPI application, all endpoints
 ├── inference.py               # Inference script — required name, root directory
 ├── openenv.yaml               # OpenEnv metadata and spec
@@ -423,8 +423,8 @@ cloud-chaos-sre/
 
 ```bash
 # 1. Clone the repository
-git clone https://huggingface.co/spaces/your-username/cloud-chaos-sre
-cd cloud-chaos-sre
+git clone https://huggingface.co/spaces/your-username/site-reliability-server
+cd site-reliability-server
 
 # 2. Install dependencies
 pip install -r requirements.txt
@@ -498,10 +498,10 @@ The environment server itself starts without any API keys. `OPENAI_API_KEY`, `AP
 
 ```bash
 # Build the image
-docker build -t cloud-chaos-sre .
+docker build -t site-reliability-server .
 
 # Run the environment server only (no API key needed for the server)
-docker run -p 7860:7860 cloud-chaos-sre
+docker run -p 7860:7860 site-reliability-server
 
 # Run with all required variables to enable /baseline and inference
 docker run -p 7860:7860 \
@@ -509,7 +509,7 @@ docker run -p 7860:7860 \
   -e API_BASE_URL=https://api.groq.com/openai/v1 \
   -e MODEL_NAME=llama-3.1-70b-versatile \
   -e HF_TOKEN=hf_your_token_here \
-  cloud-chaos-sre
+  site-reliability-server
 
 # Verify it is working
 curl http://localhost:7860/health
@@ -670,7 +670,7 @@ export MODEL_NAME=llama-3.3-70b-versatile
 ## openenv.yaml
 
 ```yaml
-name: cloud-chaos-sre
+name: site-reliability-server
 version: 1.0.0
 description: >
   An OpenEnv environment simulating a Site Reliability Engineer managing
@@ -678,7 +678,7 @@ description: >
   diagnose and remediate memory leaks, traffic spikes, and hidden
   misconfigurations across six interdependent microservices.
 author:
-  name: Cloud Chaos SRE Team
+  name: Site Reliability Server Team
   email: your@email.com
 
 tasks:

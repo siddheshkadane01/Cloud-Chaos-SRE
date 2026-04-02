@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Cloud Chaos SRE",
+    title="Site Reliability Server",
     description="OpenEnv environment simulating SRE incident response across 6 interdependent microservices.",
     version="1.1.0",
     lifespan=lifespan,
@@ -69,7 +69,7 @@ def root():
     index = _STATIC_DIR / "index.html"
     if index.exists():
         return FileResponse(str(index))
-    return {"env": "cloud-chaos-sre", "version": "1.1.0", "docs": "/docs"}
+    return {"env": "site-reliability-server", "version": "1.1.0", "docs": "/docs"}
 
 
 # ------------------------------------------------------------------
@@ -78,7 +78,7 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "env": "cloud-chaos-sre", "version": "1.1.0"}
+    return {"status": "ok", "env": "site-reliability-server", "version": "1.1.0"}
 
 
 # ------------------------------------------------------------------

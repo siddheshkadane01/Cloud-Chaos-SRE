@@ -1,5 +1,5 @@
 [project]
-name = "cloud-chaos-sre"
+name = "site-reliability-server"
 version = "1.0.0"
 description = "OpenEnv environment for SRE incident response simulation"
 readme = "README.md"

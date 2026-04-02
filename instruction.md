@@ -1,8 +1,8 @@
-# Cloud Chaos SRE — Copilot Build Instructions
+# Site Reliability Server — Copilot Build Instructions
 
 ## What you are building
 
-An OpenEnv-compliant reinforcement learning environment called **Cloud Chaos SRE**. It simulates a Site Reliability Engineer managing a virtual data centre of six interdependent microservices under active production incidents. An AI agent must diagnose and fix incidents (memory leaks, traffic spikes, hidden misconfigurations) by taking actions step by step.
+An OpenEnv-compliant reinforcement learning environment called **Site Reliability Server**. It simulates a Site Reliability Engineer managing a virtual data centre of six interdependent microservices under active production incidents. An AI agent must diagnose and fix incidents (memory leaks, traffic spikes, hidden misconfigurations) by taking actions step by step.
 
 This is a hackathon submission. Every file, variable name, endpoint, and behaviour described here is a hard requirement — do not improvise or substitute.
 
@@ -24,7 +24,7 @@ This is a hackathon submission. Every file, variable name, endpoint, and behavio
 ## Project structure — create exactly this
 
 ```
-cloud-chaos-sre/
+site-reliability-server/
 ├── main.py                        # FastAPI app — all HTTP endpoints
 ├── inference.py                   # Inference script — MUST be this exact name
 ├── openenv.yaml                   # OpenEnv metadata
@@ -695,7 +695,7 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(
-    title="Cloud Chaos SRE",
+    title="Site Reliability Server",
     description="OpenEnv environment simulating SRE incident response",
     lifespan=lifespan,
 )
@@ -705,7 +705,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"],
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "env": "cloud-chaos-sre", "version": "1.0.0"}
+    return {"status": "ok", "env": "site-reliability-server", "version": "1.0.0"}
 
 @app.post("/reset")
 def reset(body: dict):
@@ -970,7 +970,7 @@ if __name__ == "__main__":
 ## File 8 — openenv.yaml
 
 ```yaml
-name: cloud-chaos-sre
+name: site-reliability-server
 version: 1.0.0
 description: >
   An OpenEnv environment simulating a Site Reliability Engineer managing
@@ -978,7 +978,7 @@ description: >
   diagnose and remediate memory leaks, traffic spikes, and hidden
   misconfigurations across six interdependent microservices.
 author:
-  name: Cloud Chaos SRE Team
+  name: Site Reliability Server Team
   email: your@email.com
 
 tasks:
@@ -1111,7 +1111,7 @@ uvicorn main:app --host 0.0.0.0 --port 7860 &
 
 # 3. Health check
 curl http://localhost:7860/health
-# Expected: {"status":"ok","env":"cloud-chaos-sre","version":"1.0.0"}
+# Expected: {"status":"ok","env":"site-reliability-server","version":"1.0.0"}
 
 # 4. Tasks endpoint
 curl http://localhost:7860/tasks
@@ -1130,13 +1130,13 @@ pip install openenv
 openenv validate openenv.yaml
 
 # 7. Docker build and run
-docker build -t cloud-chaos-sre .
+docker build -t site-reliability-server .
 docker run -p 7860:7860 \
   -e OPENAI_API_KEY=$OPENAI_API_KEY \
   -e API_BASE_URL=$API_BASE_URL \
   -e MODEL_NAME=$MODEL_NAME \
   -e HF_TOKEN=$HF_TOKEN \
-  cloud-chaos-sre
+  site-reliability-server
 
 # 8. inference.py runs and produces scores
 export OPENAI_API_KEY=gsk_your_groq_key

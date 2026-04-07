@@ -134,7 +134,6 @@ def grade_easy(state: EpisodeState) -> tuple[float, dict]:
         breakdown["efficiency"] = 0.05
 
     score = sum(breakdown.values())
-    breakdown["raw_score"] = round(score, 4)
     return _validator_safe_score(score), breakdown
 
 
@@ -298,7 +297,6 @@ def grade_medium(state: EpisodeState) -> tuple[float, dict]:
     breakdown["discipline_component"] = round(discipline, 4)
     breakdown["unnecessary_scale_down_count"] = unnecessary_scale_down
 
-    breakdown["raw_score"] = round(score, 4)
     return _validator_safe_score(score), breakdown
 
 
@@ -430,7 +428,6 @@ def grade_hard(state: EpisodeState) -> tuple[float, dict]:
     )
 
     score = sum(components.values())
-    breakdown["raw_score"] = round(score, 4)
     return _validator_safe_score(score), breakdown
 
 
@@ -588,7 +585,6 @@ def grade_expert(state: EpisodeState) -> tuple[float, dict]:
     breakdown["post_recovery_noops"] = post_recovery_noops
 
     score = sum(components.values())
-    breakdown["raw_score"] = round(score, 4)
     return _validator_safe_score(score), breakdown
 
 

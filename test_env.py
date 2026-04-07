@@ -189,7 +189,7 @@ def test_hard_restart_only_counts_after_correct_fix():
         )
     )
     score, breakdown = env.grade()
-    assert 0.0 <= score <= 1.0
+    assert 0.0 < score < 1.0
     assert breakdown["restart_after_fix"] == 0.0
 
 
@@ -206,7 +206,7 @@ def test_hard_exact_value_does_not_also_get_value_progress():
         )
     )
     score, breakdown = env.grade()
-    assert 0.0 <= score <= 1.0
+    assert 0.0 < score < 1.0
     assert breakdown["correct_value"] == 0.20
     assert breakdown["value_progress"] == 0.0
 
@@ -216,7 +216,7 @@ def test_medium_log_only_secondary_follow_up_is_partial_credit():
     env.reset(task_id="medium", scenario_id="medium-001")
     env.step(Action(action_type=ActionType.CHECK_LOGS, target_service="cache-service"))
     score, breakdown = env.grade()
-    assert 0.0 <= score <= 1.0
+    assert 0.0 < score < 1.0
     assert breakdown["secondary_follow_up"] == 0.05
 
 
@@ -252,5 +252,5 @@ def test_full_easy_episode_completes(env):
         obs, reward, done, info = env.step(action)
         step += 1
     score, breakdown = env.grade()
-    assert 0.0 <= score <= 1.0
+    assert 0.0 < score < 1.0
     assert step <= max_steps

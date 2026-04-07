@@ -11,6 +11,8 @@ from .simulator import SERVICE_GRAPH, VirtualDataCentre
 SCENARIOS_DIR = Path(__file__).parent.parent / "scenarios"
 
 _MAX_STEPS = {"easy": 15, "medium": 15, "hard": 20, "expert": 25}
+_VALIDATOR_MIN_SCORE = 0.0001
+_VALIDATOR_MAX_SCORE = 0.9999
 TaskId = Literal["easy", "medium", "hard", "expert"]
 
 
@@ -227,7 +229,9 @@ class SREEnvironment:
         if self._state is None:
             raise RuntimeError("Call reset() and run an episode first")
         grader = GRADERS[self._state.task_id]
-        return grader(self._state)
+        raw_score, breakdown = grader(self._state)
+        safe_score = max(_VALIDATOR_MIN_SCORE, min(_VALIDATOR_MAX_SCORE, float(raw_score)))
+        return round(safe_score, 4), breakdown
 
     def _build_observation(self, task_id: TaskId, step: int, scenario_id: str) -> Observation:
         _ = scenario_id

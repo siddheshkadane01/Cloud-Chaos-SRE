@@ -1,8 +1,8 @@
 {
-  "api_base_url": "https://router.huggingface.co/v1",
+  "api_base_url": "https://api.groq.com/openai/v1",
   "benchmark": "site-reliability-server",
   "mean_score": 0.944,
-  "model": "Qwen/Qwen2.5-72B-Instruct",
+  "model": "llama-3.1-70b-versatile",
   "seed": 42,
   "tasks": {
     "easy": {
@@ -14,7 +14,7 @@
         "root_identified": 0.4,
         "targeted_remediation": 0.2
       },
-      "model_diagnosis": "The most likely incident root cause is the high CPU and memory usage of the cache-service, leading to increased error rates and latency.",
+      "model_diagnosis": null,
       "rewards": [
         0.0,
         0.1839,
@@ -52,7 +52,7 @@
           "db-proxy"
         ]
       },
-      "model_diagnosis": "The most likely incident root cause is the recent change in the cache service's pool size, leading to resource exhaustion and cascading failures in dependent services.",
+      "model_diagnosis": null,
       "rewards": [
         0.1523,
         0.0456,
@@ -83,7 +83,7 @@
         "update_actions_attempted": 1,
         "value_progress": 0.0
       },
-      "model_diagnosis": "The most likely incident root cause is a hidden configuration regression in the db-proxy service introduced during the recent deployment.",
+      "model_diagnosis": null,
       "rewards": [
         0.0,
         0.0,
@@ -140,7 +140,7 @@
           "mem_pct": 70.35518000000002
         }
       },
-      "model_diagnosis": "The most likely incident root cause is insufficient capacity in the auth-service, exacerbated by high CPU and memory usage, leading to increased error rates and latency during a traffic surge.",
+      "model_diagnosis": null,
       "rewards": [
         0.082,
         0.0253,
@@ -158,5 +158,5 @@
       "success": true
     }
   },
-  "total_time_s": 11.4
+  "total_time_s": 1.33
 }

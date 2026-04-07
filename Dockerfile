@@ -1,4 +1,4 @@
-FROM python:3.11-slim-bookworm
+FROM python:3.11-slim
 
 # Designed for 2 vCPU / 8GB RAM
 # All simulation is in-memory Python no external services required
@@ -10,10 +10,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 	OPENENV_EVALUATION_MODE=1
 
 WORKDIR /app
-
-RUN apt-get update \
-	&& apt-get upgrade -y \
-	&& rm -rf /var/lib/apt/lists/*
 
 RUN adduser --disabled-password --gecos "" --home /home/appuser appuser
 

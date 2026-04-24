@@ -32,6 +32,11 @@ tasks:
 		difficulty: expert
 		description: Resolve a cache to db cascade in the correct intervention order
 		max_steps: 25
+	- id: enterprise
+		name: Enterprise Incident Commander
+		difficulty: expert
+		description: Execute PagerDuty -> Slack -> Infra -> PagerDuty incident workflow
+		max_steps: 25
 
 observation_space:
 	type: object
@@ -42,7 +47,7 @@ observation_space:
 			type: integer
 		task_id:
 			type: string
-			enum: [easy, medium, hard, expert]
+			enum: [easy, medium, hard, expert, enterprise]
 		metrics:
 			type: object
 			description: Per-service cpu, memory, error rate, and latency metrics
@@ -75,7 +80,7 @@ action_space:
 		action_type:
 			type: string
 			enum:
-				[CHECK_LOGS, INSPECT_SERVICE, DRAIN_TRAFFIC, RESTART_SERVICE, SCALE_UP, SCALE_DOWN, ROLLBACK, UPDATE_CONFIG, SILENCE_ALERT]
+				[CHECK_LOGS, INSPECT_SERVICE, DRAIN_TRAFFIC, RESTART_SERVICE, SCALE_UP, SCALE_DOWN, ROLLBACK, UPDATE_CONFIG, SILENCE_ALERT, ACKNOWLEDGE_PAGERDUTY, SEND_SLACK_MESSAGE, RESOLVE_PAGERDUTY]
 		target_service:
 			type: string
 			enum: [api-gateway, auth-service, user-service, order-service, db-proxy, cache-service]

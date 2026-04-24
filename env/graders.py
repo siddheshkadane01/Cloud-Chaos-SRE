@@ -55,6 +55,75 @@ def _first_index(
     return None
 
 
+def _enterprise_enabled(state: EpisodeState) -> bool:
+    apps_state = getattr(state.observation, "apps_state", {}) or {}
+    return "pagerduty" in apps_state and "slack" in apps_state
+
+
+def _enterprise_breakdown(state: EpisodeState) -> tuple[float, dict]:
+    if not _enterprise_enabled(state):
+        return 0.0, {
+            "enterprise_enabled": False,
+            "enterprise_protocol_component": 0.0,
+        }
+
+    infra_actions = {
+        "CHECK_LOGS",
+        "INSPECT_SERVICE",
+        "DRAIN_TRAFFIC",
+        "RESTART_SERVICE",
+        "SCALE_UP",
+        "SCALE_DOWN",
+        "ROLLBACK",
+        "UPDATE_CONFIG",
+        "SILENCE_ALERT",
+    }
+
+    ack_idx = _first_index(state, action_type="ACKNOWLEDGE_PAGERDUTY")
+    notify_idx = _first_index(state, action_type="SEND_SLACK_MESSAGE")
+    resolve_idx = _first_index(state, action_type="RESOLVE_PAGERDUTY")
+    first_infra_idx = next(
+        (
+            idx
+            for idx, action in enumerate(state.action_history)
+            if action.get("action_type") in infra_actions
+        ),
+        None,
+    )
+
+    milestones = [ack_idx is not None, notify_idx is not None, resolve_idx is not None]
+    milestone_ratio = sum(milestones) / 3.0
+    order_ok = (
+        ack_idx is not None
+        and notify_idx is not None
+        and resolve_idx is not None
+        and ack_idx < notify_idx < resolve_idx
+    )
+    infra_after_ack = (
+        first_infra_idx is None
+        or ack_idx is None
+        or first_infra_idx > ack_idx
+    )
+    compliance_ratio = (
+        milestone_ratio * 0.6
+        + (0.2 if order_ok else 0.0)
+        + (0.2 if infra_after_ack else 0.0)
+    )
+    enterprise_component = round(0.05 * compliance_ratio, 4)
+
+    return enterprise_component, {
+        "enterprise_enabled": True,
+        "enterprise_ack_index": ack_idx,
+        "enterprise_notify_index": notify_idx,
+        "enterprise_resolve_index": resolve_idx,
+        "enterprise_first_infra_index": first_infra_idx,
+        "enterprise_sequence_ok": order_ok,
+        "enterprise_infra_after_ack": infra_after_ack,
+        "enterprise_protocol_compliance": round(compliance_ratio, 4),
+        "enterprise_protocol_component": enterprise_component,
+    }
+
+
 def grade_easy(state: EpisodeState) -> tuple[float, dict]:
     """
     Task 1 — The Detective.
@@ -134,6 +203,9 @@ def grade_easy(state: EpisodeState) -> tuple[float, dict]:
         breakdown["efficiency"] = 0.05
 
     score = sum(breakdown.values())
+    enterprise_component, enterprise = _enterprise_breakdown(state)
+    score += enterprise_component
+    breakdown.update(enterprise)
     return _validator_safe_score(score), breakdown
 
 
@@ -297,6 +369,10 @@ def grade_medium(state: EpisodeState) -> tuple[float, dict]:
     breakdown["discipline_component"] = round(discipline, 4)
     breakdown["unnecessary_scale_down_count"] = unnecessary_scale_down
 
+    enterprise_component, enterprise = _enterprise_breakdown(state)
+    score += enterprise_component
+    breakdown.update(enterprise)
+
     return _validator_safe_score(score), breakdown
 
 
@@ -428,6 +504,9 @@ def grade_hard(state: EpisodeState) -> tuple[float, dict]:
     )
 
     score = sum(components.values())
+    enterprise_component, enterprise = _enterprise_breakdown(state)
+    score += enterprise_component
+    breakdown.update(enterprise)
     return _validator_safe_score(score), breakdown
 
 
@@ -585,6 +664,9 @@ def grade_expert(state: EpisodeState) -> tuple[float, dict]:
     breakdown["post_recovery_noops"] = post_recovery_noops
 
     score = sum(components.values())
+    enterprise_component, enterprise = _enterprise_breakdown(state)
+    score += enterprise_component
+    breakdown.update(enterprise)
     return _validator_safe_score(score), breakdown
 
 
@@ -593,4 +675,5 @@ GRADERS = {
     "medium": grade_medium,
     "hard": grade_hard,
     "expert": grade_expert,
+    "enterprise": grade_expert,
 }

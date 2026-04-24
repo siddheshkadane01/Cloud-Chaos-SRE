@@ -15,6 +15,9 @@ class ActionType(str, Enum):
     ROLLBACK = "ROLLBACK"
     UPDATE_CONFIG = "UPDATE_CONFIG"
     SILENCE_ALERT = "SILENCE_ALERT"
+    ACKNOWLEDGE_PAGERDUTY = "ACKNOWLEDGE_PAGERDUTY"
+    SEND_SLACK_MESSAGE = "SEND_SLACK_MESSAGE"
+    RESOLVE_PAGERDUTY = "RESOLVE_PAGERDUTY"
 
 
 VALID_SERVICES = [
@@ -94,8 +97,8 @@ class Observation(BaseModel):
 
     step: int = Field(description="Current step in episode")
     max_steps: int = Field(description="Max steps allowed")
-    task_id: Literal["easy", "medium", "hard", "expert"] = Field(
-        description="Active task: easy|medium|hard|expert"
+    task_id: Literal["easy", "medium", "hard", "expert", "enterprise"] = Field(
+        description="Active task: easy|medium|hard|expert|enterprise"
     )
     metrics: SystemMetrics = Field(description="Current system metrics")
     logs: list[LogEntry] = Field(description="Last 10 log entries")
@@ -105,6 +108,14 @@ class Observation(BaseModel):
     active_alerts: list[Alert] = Field(description="Active alerts")
     health_summary: HealthSummary = Field(description="Current health summary")
     incident_context: IncidentContext = Field(description="Current incident ticket and operational context")
+    apps_state: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Mock enterprise app state, e.g. PagerDuty tickets and Slack channels/messages",
+    )
+    protocol_status: dict[str, bool] = Field(
+        default_factory=dict,
+        description="Current enterprise workflow flags (is_acknowledged, is_team_notified, is_resolved)",
+    )
 
 
 class Action(BaseModel):
@@ -121,6 +132,16 @@ class Action(BaseModel):
     ] = Field(description="Must be one of VALID_SERVICES")
     config_key: str | None = Field(default=None, description="Required for UPDATE_CONFIG")
     config_value: Any | None = Field(default=None, description="Required for UPDATE_CONFIG")
+    params: dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Generic action arguments for enterprise workflows, e.g. "
+            "incident_id, channel_name, message_text"
+        ),
+    )
+    incident_id: str | None = Field(default=None, description="PagerDuty incident id for ACK/RESOLVE")
+    channel_name: str | None = Field(default=None, description="Slack channel for SEND_SLACK_MESSAGE")
+    message_text: str | None = Field(default=None, description="Slack message content")
     reason: str | None = Field(default=None, description="Agent reasoning used by Task 1 grader")
 
 
@@ -133,6 +154,9 @@ class RewardBreakdown(BaseModel):
     latency_delta: float = Field(description="Weighted latency contribution")
     invalid_penalty: float = Field(description="Weighted invalid action penalty")
     risk_penalty: float = Field(description="Penalty for disruptive or misleading actions")
+    protocol_penalty: float = Field(default=0.0, description="Penalty for breaking enterprise protocol")
+    protocol_progress_bonus: float = Field(default=0.0, description="Bonus for protocol milestones")
+    completion_bonus: float = Field(default=0.0, description="Bonus for successful enterprise completion")
 
 
 class Reward(BaseModel):
@@ -146,7 +170,7 @@ class Reward(BaseModel):
 class EpisodeState(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    task_id: Literal["easy", "medium", "hard", "expert"] = Field(description="Current task id")
+    task_id: Literal["easy", "medium", "hard", "expert", "enterprise"] = Field(description="Current task id")
     scenario_id: str = Field(description="Active scenario id")
     step: int = Field(description="Current step count")
     done: bool = Field(description="Whether the episode has terminated")
@@ -154,4 +178,12 @@ class EpisodeState(BaseModel):
     action_history: list[dict] = Field(description="Sequence of action payloads")
     reward_history: list[float] = Field(description="Per-step reward values")
     cumulative_reward: float = Field(description="Total accumulated reward")
+    protocol_status: dict[str, bool] = Field(
+        default_factory=lambda: {
+            "is_acknowledged": False,
+            "is_team_notified": False,
+            "is_resolved": False,
+        },
+        description="Internal enterprise protocol flags",
+    )
     grader_score: float | None = Field(default=None, description="Optional grader score")

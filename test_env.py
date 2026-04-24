@@ -254,3 +254,76 @@ def test_full_easy_episode_completes(env):
     score, breakdown = env.grade()
     assert 0.0 < score < 1.0
     assert step <= max_steps
+
+
+def test_enterprise_full_protocol_sequence_rewards():
+    env = SREEnvironment()
+    env.reset(task_id="enterprise", scenario_id="enterprise-001")
+
+    # 1) Acknowledge incident in PagerDuty.
+    _, ack_reward, ack_done, ack_info = env.step(
+        Action(
+            action_type=ActionType.ACKNOWLEDGE_PAGERDUTY,
+            target_service="user-service",
+            incident_id="INC-ENT-001",
+        )
+    )
+    assert ack_done is False
+    assert ack_info["action_valid"] is True
+    assert ack_reward.breakdown.protocol_progress_bonus == 0.1
+    assert ack_reward.breakdown.protocol_penalty == 0.0
+    assert ack_info["protocol_status"]["is_acknowledged"] is True
+
+    # 2) Notify team in Slack.
+    _, slack_reward, slack_done, slack_info = env.step(
+        Action(
+            action_type=ActionType.SEND_SLACK_MESSAGE,
+            target_service="user-service",
+            incident_id="INC-ENT-001",
+            channel_name="incident-response",
+            message_text="Incident acknowledged, restarting user-service now.",
+        )
+    )
+    assert slack_done is False
+    assert slack_info["action_valid"] is True
+    assert slack_reward.breakdown.protocol_progress_bonus == 0.1
+    assert slack_reward.breakdown.protocol_penalty == 0.0
+    assert slack_info["protocol_status"]["is_team_notified"] is True
+
+    # 3) Fix the issue in infra after protocol pre-steps.
+    _, fix_reward, fix_done, fix_info = env.step(
+        Action(action_type=ActionType.RESTART_SERVICE, target_service="user-service")
+    )
+    assert fix_done is False
+    assert fix_info["action_valid"] is True
+    assert fix_reward.breakdown.protocol_penalty == 0.0
+    assert fix_reward.breakdown.protocol_progress_bonus == 0.0
+
+    # 4) Resolve the PagerDuty incident and collect completion bonus.
+    _, resolve_reward, resolve_done, resolve_info = env.step(
+        Action(
+            action_type=ActionType.RESOLVE_PAGERDUTY,
+            target_service="user-service",
+            incident_id="INC-ENT-001",
+        )
+    )
+    assert resolve_info["action_valid"] is True
+    assert resolve_reward.breakdown.protocol_penalty == 0.0
+    assert resolve_reward.breakdown.completion_bonus == 0.5
+    assert resolve_done is True
+    assert resolve_info["protocol_status"]["is_resolved"] is True
+
+
+def test_enterprise_protocol_penalty_before_acknowledge():
+    env = SREEnvironment()
+    env.reset(task_id="enterprise", scenario_id="enterprise-001")
+
+    # Attempt infra remediation before PagerDuty acknowledgement.
+    _, reward, done, info = env.step(
+        Action(action_type=ActionType.RESTART_SERVICE, target_service="user-service")
+    )
+
+    assert done is False
+    assert info["action_valid"] is True
+    assert reward.breakdown.protocol_penalty == -0.2
+    assert info["protocol_status"]["is_acknowledged"] is False

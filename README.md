@@ -27,7 +27,7 @@ It is useful for evaluating whether an agent can improve reliability outcomes in
 
 - Real-world utility: production-style SRE incident diagnosis and remediation across dependent microservices.
 - OpenEnv compliance: typed Observation/Action/Reward models with `reset`, `step`, `state`, and `openenv.yaml`.
-- Task quality: 4 progressive tasks (`easy`, `medium`, `hard`, `expert`) with deterministic programmatic graders.
+- Task quality: 5 progressive tasks (`easy`, `medium`, `hard`, `expert`, `enterprise`) with deterministic programmatic graders.
 - Learning quality: dense reward signal with progress terms and penalties for low-value behavior.
 - Deployment readiness: works with Docker, Hugging Face Spaces, and OpenEnv validation.
 - Infra fit: designed for `vcpu=2`, `memory=8gb`, with inference timeout bounded below 20 minutes.
@@ -86,7 +86,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    T1[Easy: Detective] --> T2[Medium: First Responder] --> T3[Hard: Architect] --> T4[Expert: Storm Chaser]
+  T1[Easy: Detective] --> T2[Medium: First Responder] --> T3[Hard: Architect] --> T4[Expert: Storm Chaser] --> T5[Enterprise: Incident Commander]
 ```
 
 ## Capability Matrix
@@ -95,10 +95,11 @@ flowchart LR
 |---|---|
 | Environment API | FastAPI with `POST /reset`, `POST /step`, `GET /state` |
 | Typed models | Pydantic models for Observation, Action, Reward, EpisodeState |
-| Tasks | 4 tasks with increasing difficulty and step budgets |
+| Tasks | 5 tasks with increasing difficulty and step budgets |
 | Grading | Deterministic graders returning numeric `0.0-1.0` scores |
 | Rewards | Dense, per-step shaping with positive progress and penalties |
 | Baseline | Root-level `inference.py` using OpenAI client + env vars |
+| RL Training | `train_grpo.py` (primary) and `train_ppo.py` (legacy-compatible) |
 | Packaging | Dockerfile + `openenv.yaml` + local OpenEnv validation |
 | Deployment | HF Space-compatible containerized runtime |
 
@@ -117,6 +118,7 @@ flowchart LR
 | medium | Recover all key health metrics | 15 | 0.0 to 1.0 |
 | hard | Fix hidden config regression | 20 | 0.0 to 1.0 |
 | expert | Resolve multi-cause cascade | 25 | 0.0 to 1.0 |
+| enterprise | Enforce incident protocol (ack -> notify -> fix -> resolve) | 25 | 0.0 to 1.0 |
 
 ### What Makes Each Task Hard
 
@@ -124,6 +126,7 @@ flowchart LR
 - medium: requires balancing multiple metrics, not optimizing only one.
 - hard: requires config-level diagnosis from deploy/config context.
 - expert: requires ordered recovery under cascading multi-service failure.
+- enterprise: requires strict operational sequence across PagerDuty, Slack, and infra actions.
 
 ## Observation and Action Spaces
 
@@ -133,11 +136,14 @@ flowchart LR
 - `logs`, `deploy_history`, `current_config`
 - `service_graph`, `active_alerts`, `health_summary`
 - `incident_context`
+- `apps_state` (enterprise app surfaces, e.g. PagerDuty/Slack)
+- `protocol_status` (`is_acknowledged`, `is_team_notified`, `is_resolved`)
 
 ### Action (typed)
-- `action_type`: CHECK_LOGS, INSPECT_SERVICE, DRAIN_TRAFFIC, RESTART_SERVICE, SCALE_UP, SCALE_DOWN, ROLLBACK, UPDATE_CONFIG, SILENCE_ALERT
+- `action_type`: CHECK_LOGS, INSPECT_SERVICE, DRAIN_TRAFFIC, RESTART_SERVICE, SCALE_UP, SCALE_DOWN, ROLLBACK, UPDATE_CONFIG, SILENCE_ALERT, ACKNOWLEDGE_PAGERDUTY, SEND_SLACK_MESSAGE, RESOLVE_PAGERDUTY
 - `target_service`: one of six services
 - `config_key`, `config_value` (for UPDATE_CONFIG)
+- `incident_id`, `channel_name`, `message_text`, `params` (enterprise workflow payload)
 - `reason`
 
 ### Space Summary
@@ -157,6 +163,7 @@ Per-step signal combines:
 - cost-awareness
 - penalties for invalid/repeated low-value actions
 - explicit risk penalties for disruptive behavior
+- enterprise protocol penalties/bonuses (`protocol_penalty`, `protocol_progress_bonus`, `completion_bonus`)
 
 This gives dense learning feedback instead of only end-of-episode binary success.
 
@@ -168,6 +175,7 @@ This gives dense learning feedback instead of only end-of-episode binary success
 - `GET /tasks`
 - `POST /grader`
 - `POST /baseline`
+- `GET /metrics`
 - `GET /health`
 
 ## Baseline Notes
@@ -176,6 +184,7 @@ This gives dense learning feedback instead of only end-of-episode binary success
 - Reads `OPENAI_API_KEY` (preferred), `HF_TOKEN` (fallback), `API_BASE_URL`, and `MODEL_NAME` from environment.
 - Runtime limit is bounded below 20 minutes (19-minute global timeout).
 - Output written to `baseline_scores.json`.
+- Baseline currently runs canonical scenarios for `easy`, `medium`, `hard`, and `expert`.
 - Reproducibility is deterministic for scenario selection and environment dynamics in evaluation mode.
 
 ## Infra Constraints
@@ -204,27 +213,72 @@ curl -s -o /dev/null -w '%{http_code}' -X POST \
 # Docker build
 docker build .
 
-# OpenEnv validate (venv path-safe)
-/Users/siddhesh/Documents/Projects/Cloud-Chaos-SRE/.venv/bin/openenv validate
-
-# Full local pre-submit validation
+# Run all local checks (pytest + openenv validate + docker + baseline)
 ./scripts/validate-local.sh
+
+# Or run OpenEnv validation directly (path-safe)
+.venv/bin/openenv validate
+
+# Quick health check when server is running
+curl http://127.0.0.1:7860/health
 ```
 
-These checks verify environment reachability, container buildability, and OpenEnv compliance.
+These checks verify tests, OpenEnv compliance, container buildability, and baseline readiness.
+
+## RL Training
+
+Primary RL path for current evaluation setup:
+
+- `train_grpo.py`: GRPO trainer with Unsloth 4-bit loading and LoRA adaptation.
+- `requirements_rl.txt`: RL dependencies for GRPO/TRL workflow.
+- `train_ppo.py`: legacy PPO path kept for compatibility experiments.
+
+Training scripts interact with the same local FastAPI environment via `/reset` and `/step`.
+
+## GRPO Smoke Test (1 Epoch)
+
+Use this quick check to verify local wiring for Unsloth + GRPO against the FastAPI environment.
+
+```bash
+# Terminal 1: activate venv and start API server
+source .venv/bin/activate
+python3 -m uvicorn main:app --host 0.0.0.0 --port 7860
+```
+
+```bash
+# Terminal 2: activate venv and install RL stack
+source .venv/bin/activate
+python3 -m pip install -r requirements_rl.txt
+
+# Optional fallback if unsloth wheel resolution fails
+python3 -m pip install "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git"
+
+# 1-epoch smoke run (small test model for local checks)
+WANDB_MODE=disabled python3 train_grpo.py --epochs 1 --max_steps 1 --model_name sshleifer/tiny-gpt2
+```
+
+Expected signal in the server logs:
+- `POST /reset HTTP/1.1" 200`
+- `POST /step HTTP/1.1" 200`
+
+For actual training on A100, switch back to:
+- `--model_name meta-llama/Meta-Llama-3-8B-Instruct`
 
 ## Project Structure
 
 ```text
 site-reliability-server/
 ├── main.py, inference.py, openenv.yaml, Dockerfile, requirements.txt
-├── README.md, instruction.md, pyproject.toml, uv.lock, test_env.py
+├── readme.md, pyproject.toml, test_env.py
+├── requirements_rl.txt, train_grpo.py, train_ppo.py
 ├── env/                         # core environment logic
 │   ├── models.py, environment.py, simulator.py
 │   ├── graders.py, tasks.py, data_generator.py
 │   └── __init__.py
 ├── scenarios/                    # task datasets
-│   ├── easy/, medium/, hard/, expert/
+│   ├── easy/, medium/, hard/, expert/, enterprise/
+├── scripts/
+│   └── validate-local.sh
 ├── static/                       # web landing page
 │   └── index.html
 └── server/                       # compatibility entrypoint

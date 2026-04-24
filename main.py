@@ -23,7 +23,7 @@ env = SREEnvironment(deterministic=True, evaluation_mode=True)
 class ResetRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    task_id: Literal["easy", "medium", "hard", "expert"] = Field(default="easy")
+    task_id: Literal["easy", "medium", "hard", "expert", "enterprise"] = Field(default="easy")
     scenario_id: str | None = Field(default=None)
     seed: int | None = Field(default=None)
     deterministic: bool | None = Field(default=None)

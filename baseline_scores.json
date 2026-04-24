@@ -10,7 +10,6 @@
         "efficiency": 0.05,
         "health_restored": 0.149,
         "operational_discipline": 0.2,
-        "raw_score": 0.999,
         "root_identified": 0.4,
         "targeted_remediation": 0.2
       },
@@ -41,7 +40,6 @@
         "no_collateral": 0.1,
         "post_recovery_actions": 1,
         "post_recovery_noops": 0,
-        "raw_score": 0.9745,
         "recovery_complete_index": 4,
         "restart_order": [
           "cache-service",
@@ -76,7 +74,6 @@
         "first_correct_fix_index": 3,
         "first_restart_index": 4,
         "health_restored": 0.147,
-        "raw_score": 0.897,
         "restart_after_fix": 0.1,
         "scenario_expected_key": "db_timeout",
         "scenario_expected_value": 5000,
@@ -112,7 +109,6 @@
         "metric_component": 1.0,
         "oscillation_count": 2,
         "primary_restart_count": 1,
-        "raw_score": 0.906,
         "restarted_primary": 1.0,
         "scaled_primary": 1.0,
         "scenario_root_cause_service": "auth-service",

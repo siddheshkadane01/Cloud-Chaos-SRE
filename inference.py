@@ -66,7 +66,7 @@ _SERVER_PROCESS: subprocess.Popen[str] | None = None
 
 @dataclass
 class EpisodeResult:
-    task_id: Literal["easy", "medium", "hard", "expert"]
+    task_id: Literal["easy", "medium", "hard", "expert", "enterprise"]
     scenario_id: str
     score: float
     success: bool

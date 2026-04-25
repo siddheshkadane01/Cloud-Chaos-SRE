@@ -3,7 +3,6 @@ import json
 import os
 import random
 import re
-import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -12,12 +11,12 @@ import torch
 import wandb
 from datasets import Dataset
 from requests.adapters import HTTPAdapter
-from tqdm import tqdm
 from urllib3.util.retry import Retry
 
 from unsloth import FastLanguageModel
 
-from trl import GRPOConfig, GRPOTrainer
+from trl.trainer.grpo_config import GRPOConfig
+from trl.trainer.grpo_trainer import GRPOTrainer
 
 ACTION_TYPES = {
     "CHECK_LOGS",
@@ -171,18 +170,18 @@ def fallback_action() -> dict[str, Any]:
     return {"action_type": "CHECK_LOGS", "target_service": "user-service"}
 
 
-def parse_action_output(text: str) -> dict[str, Any]:
+def _parse_action_output_with_flag(text: str) -> tuple[dict[str, Any], bool]:
     json_blob = extract_json_object(text)
     if json_blob is None:
-        return fallback_action()
+        return fallback_action(), True
 
     try:
         parsed = json.loads(json_blob)
     except json.JSONDecodeError:
-        return fallback_action()
+        return fallback_action(), True
 
     if not isinstance(parsed, dict):
-        return fallback_action()
+        return fallback_action(), True
 
     action_type = str(parsed.get("action_type", "CHECK_LOGS")).upper()
     target_service = str(parsed.get("target_service", "user-service"))
@@ -209,6 +208,11 @@ def parse_action_output(text: str) -> dict[str, Any]:
         if optional_key in parsed:
             action[optional_key] = parsed[optional_key]
 
+    return action, False
+
+
+def parse_action_output(text: str) -> dict[str, Any]:
+    action, _ = _parse_action_output_with_flag(text)
     return action
 
 
@@ -292,7 +296,6 @@ def _protocol_adherence_scores(actions: list[dict[str, Any]]) -> list[float]:
 
 def make_format_validity_reward_function():
     def format_validity_reward(prompts: list[str], completions: list[Any], **_: Any) -> list[float]:
-        _ = prompts
         rewards: list[float] = []
         for completion in completions:
             completion_text = _completion_to_text(completion)
@@ -304,7 +307,6 @@ def make_format_validity_reward_function():
 
 def make_action_validity_reward_function():
     def action_validity_reward(prompts: list[str], completions: list[Any], **_: Any) -> list[float]:
-        _ = prompts
         rewards: list[float] = []
         for completion in completions:
             completion_text = _completion_to_text(completion)
@@ -317,7 +319,6 @@ def make_action_validity_reward_function():
 
 def make_protocol_adherence_reward_function():
     def protocol_adherence_reward(prompts: list[str], completions: list[Any], **_: Any) -> list[float]:
-        _ = prompts
         actions: list[dict[str, Any]] = []
         for completion in completions:
             completion_text = _completion_to_text(completion)
@@ -371,6 +372,7 @@ def init_unsloth_model(args: argparse.Namespace):
 
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.pad_token_id = tokenizer.eos_token_id
     tokenizer.padding_side = "left"
 
     return model, tokenizer
@@ -397,32 +399,40 @@ def make_env_reward_function(
     session: requests.Session,
     env_url: str,
     timeout: float,
+    max_steps: int,
 ):
     def env_reward_func(prompts: list[str], completions: list[Any], **_: Any) -> list[float]:
-        _ = prompts
         rewards: list[float] = []
-        episode_active = False
-        episode_done = False
 
         for completion in completions:
-            completion_text = _completion_to_text(completion)
-            action_payload = parse_action_output(completion_text)
-
-            if episode_done:
-                rewards.append(-0.05)
-                continue
-
             try:
-                if not episode_active:
-                    reset_env(session, env_url, timeout)
-                    episode_active = True
-                step_result = step_env(session, env_url, action_payload, timeout)
-                rewards.append(step_result.reward)
-                if step_result.done:
-                    episode_done = True
+                reset_env(session, env_url, timeout)
             except Exception:
                 rewards.append(-1.0)
-                episode_done = True
+                wandb.log(
+                    {
+                        "step_reward": -1.0,
+                        "invalid_action_rate": 1.0,
+                    }
+                )
+                continue
+
+            completion_text = _completion_to_text(completion)
+            action_payload, used_fallback = _parse_action_output_with_flag(completion_text)
+
+            try:
+                step_result = step_env(session, env_url, action_payload, timeout)
+                step_reward = step_result.reward
+            except Exception:
+                step_reward = -1.0
+
+            wandb.log(
+                {
+                    "step_reward": step_reward,
+                    "invalid_action_rate": 1.0 if used_fallback else 0.0,
+                }
+            )
+            rewards.append(step_reward)
         return rewards
 
     return env_reward_func
@@ -456,6 +466,7 @@ def train(args: argparse.Namespace) -> None:
         session=session,
         env_url=args.env_url,
         timeout=args.request_timeout,
+        max_steps=args.max_steps,
     )
     format_reward_fn = make_format_validity_reward_function()
     action_reward_fn = make_action_validity_reward_function()
@@ -467,14 +478,15 @@ def train(args: argparse.Namespace) -> None:
     grpo_config = GRPOConfig(
         output_dir=args.output_dir,
         learning_rate=args.learning_rate,
-        per_device_train_batch_size=1,
+        per_device_train_batch_size=args.num_generations,
         gradient_accumulation_steps=1,
         num_generations=args.num_generations,
         max_completion_length=args.max_new_tokens,
-        num_train_epochs=1,
-        report_to="none",
+        num_train_epochs=args.epochs,
+        report_to="wandb",
         logging_steps=1,
     )
+    setattr(grpo_config, "padding_value", tokenizer.pad_token_id)
 
     grpo_trainer = GRPOTrainer(
         model=model,
@@ -491,105 +503,12 @@ def train(args: argparse.Namespace) -> None:
 
     os.makedirs(args.output_dir, exist_ok=True)
 
-    generation_kwargs = {
-        "max_new_tokens": args.max_new_tokens,
-        "do_sample": True,
-        "temperature": args.temperature,
-        "top_p": args.top_p,
-        "pad_token_id": tokenizer.eos_token_id,
-        "eos_token_id": tokenizer.eos_token_id,
-    }
+    try:
+        grpo_trainer.train()
+    except Exception as exc:
+        wandb.log({"grpo_error": str(exc)})
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    global_step = 0
-
-    for epoch in tqdm(range(args.epochs), desc="GRPO Epochs"):
-        try:
-            observation = reset_env(session, args.env_url, timeout=args.request_timeout)
-        except Exception as exc:
-            wandb.log({"epoch": epoch, "reset_error": str(exc)})
-            time.sleep(1.0)
-            continue
-
-        episode_rewards: list[float] = []
-        epoch_prompts: list[str] = []
-        done = False
-
-        for step_idx in range(args.max_steps):
-            prompt = build_prompt(observation)
-            epoch_prompts.append(prompt)
-            query_tensor = tokenizer(
-                prompt,
-                return_tensors="pt",
-                truncation=True,
-                max_length=args.max_prompt_length,
-            ).input_ids.to(device)
-
-            try:
-                response_tensor = model.generate(query_tensor, **generation_kwargs)
-                completion_tensor = response_tensor[0][query_tensor.shape[1] :]
-                response_text = tokenizer.decode(completion_tensor, skip_special_tokens=True)
-            except Exception as exc:
-                wandb.log({"epoch": epoch, "step": step_idx, "generation_error": str(exc)})
-                response_text = json.dumps(fallback_action())
-
-            action_payload = parse_action_output(response_text)
-
-            try:
-                step_result = step_env(
-                    session,
-                    args.env_url,
-                    action_payload,
-                    timeout=args.request_timeout,
-                )
-            except Exception as exc:
-                wandb.log({"epoch": epoch, "step": step_idx, "step_error": str(exc)})
-                step_result = EnvStepResult(
-                    observation=observation,
-                    reward=-1.0,
-                    done=True,
-                    info={"error": str(exc)},
-                )
-
-            episode_rewards.append(step_result.reward)
-            global_step += 1
-            mean_reward = sum(episode_rewards) / len(episode_rewards)
-
-            wandb.log(
-                {
-                    "epoch": epoch,
-                    "global_step": global_step,
-                    "step_index": step_idx,
-                    "step_reward": step_result.reward,
-                    "mean_reward": mean_reward,
-                    "episode_length": step_idx + 1,
-                }
-            )
-
-            observation = step_result.observation
-            done = step_result.done
-            if done:
-                break
-
-        # One GRPO optimization pass per epoch using prompts observed from the live environment.
-        if epoch_prompts:
-            grpo_trainer.train_dataset = Dataset.from_dict({"prompt": epoch_prompts})
-            try:
-                grpo_trainer.train()
-            except Exception as exc:
-                wandb.log({"epoch": epoch, "grpo_error": str(exc)})
-
-        final_mean_reward = sum(episode_rewards) / max(1, len(episode_rewards))
-        wandb.log(
-            {
-                "epoch": epoch,
-                "mean_reward": final_mean_reward,
-                "episode_length": len(episode_rewards),
-                "episode_done": done,
-            }
-        )
-
-    grpo_trainer.model.save_pretrained(args.output_dir)
+    model.save_pretrained(args.output_dir)
     tokenizer.save_pretrained(args.output_dir)
     wandb.finish()
 
@@ -612,7 +531,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--num_generations", type=int, default=2)
     parser.add_argument("--lora_r", type=int, default=16)
     parser.add_argument("--lora_alpha", type=int, default=32)
-    parser.add_argument("--lora_dropout", type=float, default=0.05)
+    parser.add_argument("--lora_dropout", type=float, default=0.0)
     return parser
 
 

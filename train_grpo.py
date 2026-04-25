@@ -485,6 +485,8 @@ def train(args: argparse.Namespace) -> None:
         num_train_epochs=args.epochs,
         report_to="wandb",
         logging_steps=1,
+        bf16=False,
+        fp16=True,
     )
     setattr(grpo_config, "padding_value", tokenizer.pad_token_id)
 

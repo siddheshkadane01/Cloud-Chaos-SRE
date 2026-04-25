@@ -328,17 +328,30 @@ def make_protocol_adherence_reward_function():
 
 
 def build_prompt(observation: dict[str, Any]) -> str:
-    compact_obs = json.dumps(observation, separators=(",", ":"), ensure_ascii=True)
+    compact_obs = json.dumps(
+        observation, separators=(",", ":"), ensure_ascii=True
+    )
     return (
-        "You are an on-call SRE agent for an enterprise workflow incident. "
-        "Return ONLY one JSON object and no markdown. "
-        "Required keys: action_type, target_service. "
-        "Allowed action_type values: CHECK_LOGS, INSPECT_SERVICE, DRAIN_TRAFFIC, RESTART_SERVICE, "
-        "SCALE_UP, SCALE_DOWN, ROLLBACK, UPDATE_CONFIG, SILENCE_ALERT, "
-        "ACKNOWLEDGE_PAGERDUTY, SEND_SLACK_MESSAGE, RESOLVE_PAGERDUTY.\\n"
-        "Observation:\\n"
-        f"{compact_obs}\\n"
-        "Action JSON:"
+        "<|im_start|>system\n"
+        "You are an expert on-call SRE agent responding to a "
+        "production incident.\n"
+        "You must respond with ONLY a single JSON object. "
+        "No explanation, no markdown, no extra text.\n"
+        "Required keys:\n"
+        "  action_type: one of CHECK_LOGS, INSPECT_SERVICE, "
+        "DRAIN_TRAFFIC, RESTART_SERVICE, SCALE_UP, SCALE_DOWN, "
+        "ROLLBACK, UPDATE_CONFIG, SILENCE_ALERT, "
+        "ACKNOWLEDGE_PAGERDUTY, SEND_SLACK_MESSAGE, "
+        "RESOLVE_PAGERDUTY\n"
+        "  target_service: one of api-gateway, auth-service, "
+        "user-service, order-service, db-proxy, cache-service\n"
+        "Example: {\"action_type\": \"CHECK_LOGS\", "
+        "\"target_service\": \"api-gateway\"}"
+        "<|im_end|>\n"
+        "<|im_start|>user\n"
+        f"{compact_obs}"
+        "<|im_end|>\n"
+        "<|im_start|>assistant\n"
     )
 
 
@@ -469,8 +482,35 @@ def train(args: argparse.Namespace) -> None:
     action_reward_fn = make_action_validity_reward_function()
     protocol_reward_fn = make_protocol_adherence_reward_function()
 
-    # Keep a minimal bootstrap dataset; we overwrite this each epoch.
-    train_dataset = Dataset.from_dict({"prompt": ["Bootstrap prompt for GRPO trainer."]})
+    obs_templates = [
+        {"services": {"api-gateway": {"health": 0.2,
+         "latency_ms": 800, "error_rate": 0.15}},
+         "alerts": [{"type": "HIGH_LATENCY",
+         "service": "api-gateway"}], "step": 0},
+        {"services": {"db-proxy": {"health": 0.1,
+         "latency_ms": 2000, "error_rate": 0.4}},
+         "alerts": [{"type": "SERVICE_DOWN",
+         "service": "db-proxy"}], "step": 0},
+        {"services": {"auth-service": {"health": 0.5,
+         "latency_ms": 400, "error_rate": 0.08}},
+         "alerts": [{"type": "DEGRADED",
+         "service": "auth-service"}], "step": 0},
+        {"services": {"cache-service": {"health": 0.3,
+         "latency_ms": 600, "error_rate": 0.2}},
+         "alerts": [{"type": "HIGH_ERROR_RATE",
+         "service": "cache-service"}], "step": 0},
+        {"services": {"order-service": {"health": 0.0,
+         "latency_ms": 5000, "error_rate": 0.9}},
+         "alerts": [{"type": "SERVICE_DOWN",
+         "service": "order-service"}], "step": 0},
+        {"services": {"user-service": {"health": 0.6,
+         "latency_ms": 350, "error_rate": 0.05}},
+         "alerts": [{"type": "ELEVATED_LATENCY",
+         "service": "user-service"}], "step": 0},
+    ]
+    train_dataset = Dataset.from_dict(
+        {"prompt": [build_prompt(obs) for obs in obs_templates]}
+    )
 
     grpo_config = GRPOConfig(
         output_dir=args.output_dir,

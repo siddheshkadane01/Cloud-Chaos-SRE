@@ -1,0 +1,96 @@
+{
+  "scenario_id": "enterprise-004",
+  "task_id": "enterprise",
+  "initial_state": {
+    "api-gateway": {
+      "cpu_pct": 20.0,
+      "mem_pct": 30.0,
+      "error_rate": 0.0,
+      "latency_ms": 100.0
+    },
+    "auth-service": {
+      "cpu_pct": 20.0,
+      "mem_pct": 30.0,
+      "error_rate": 0.0,
+      "latency_ms": 50.0
+    },
+    "user-service": {
+      "cpu_pct": 20.0,
+      "mem_pct": 30.0,
+      "error_rate": 0.0,
+      "latency_ms": 500.0
+    },
+    "order-service": {
+      "cpu_pct": 20.0,
+      "mem_pct": 30.0,
+      "error_rate": 0.0,
+      "latency_ms": 200.0
+    },
+    "db-proxy": {
+      "cpu_pct": 90.0,
+      "mem_pct": 30.0,
+      "error_rate": 0.5,
+      "latency_ms": 50.0
+    },
+    "cache-service": {
+      "cpu_pct": 20.0,
+      "mem_pct": 30.0,
+      "error_rate": 0.0,
+      "latency_ms": 10.0
+    }
+  },
+  "initial_config": {
+    "db_timeout": 5000,
+    "pool_size": 10,
+    "replica_count": 1,
+    "ttl": 300,
+    "memory_limit_mb": 512,
+    "gc_interval_ms": 45000
+  },
+  "deploy_history": [
+    {
+      "deploy_id": "d001",
+      "timestamp": "2025-01-01T00:00:00Z",
+      "service": "db-proxy",
+      "changes": {
+        "memory_limit_mb": 512
+      }
+    }
+  ],
+  "incident_context": {
+    "incident_id": "INC-ENT-004",
+    "title": "DB-proxy connection leak",
+    "severity": "SEV-1",
+    "business_service": "General Service",
+    "customer_impact": "Data persistence errors; profile updates failing.",
+    "symptom_summary": "DB-proxy memory usage high, user-service error rate elevated.",
+    "suspected_services": [
+      "db-proxy",
+      "user-service",
+      "api-gateway"
+    ],
+    "failure_mode": "db-proxy connection leak",
+    "success_criteria": "Acknowledge pager, notify incident channel, restore service health, then resolve incident in PagerDuty."
+  },
+  "ground_truth": {
+    "root_cause_service": "db-proxy",
+    "secondary_cause_service": "user-service",
+    "correct_action": "RESTART_SERVICE",
+    "correct_config_key": null,
+    "correct_config_value": null
+  },
+  "enterprise_workflow": {
+    "enabled": true,
+    "required_sequence": [
+      "ACKNOWLEDGE_PAGERDUTY",
+      "SEND_SLACK_MESSAGE",
+      "RESTART_SERVICE",
+      "RESOLVE_PAGERDUTY"
+    ],
+    "completion_rule": {
+      "mode": "threshold",
+      "value": 0.95,
+      "description": "Resolve bonus is awarded when overall health reaches >= 0.95 and RESOLVE_PAGERDUTY succeeds."
+    }
+  }
+}

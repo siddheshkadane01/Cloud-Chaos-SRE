@@ -656,7 +656,7 @@ def make_env_reward_function(
 
             # Entropy penalty: avoid repeated same action per group
             if idx > 0:
-                prev_action = sampled_actions[-1]
+                prev_action = sampled_actions[-2]
                 if prev_action.get("action_type") == action_type and prev_action.get("target_service") == action_payload.get("target_service"):
                     shaped_reward -= 0.1
 
@@ -789,7 +789,18 @@ def train(args: argparse.Namespace) -> None:
             )
     random.shuffle(obs_templates)
 
-    num_generations = max(4, args.num_generations)
+    # Ensure num_generations is valid for GRPO constraints
+    batch_size = max(1, args.per_device_train_batch_size)
+    num_generations = min(args.num_generations, batch_size)
+
+    # Make sure batch_size % num_generations == 0
+    if batch_size % num_generations != 0:
+        import math
+        gcd_val = math.gcd(batch_size, num_generations)
+        num_generations = gcd_val if gcd_val > 0 else 1
+
+    print("[DEBUG] final num_generations:", num_generations)
+    print("[DEBUG] batch_size:", batch_size)
     train_dataset = Dataset.from_dict(
         {"prompt": [build_prompt(obs) for obs in obs_templates]}
     )
@@ -849,7 +860,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max_seq_length", type=int, default=2048)
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--top_p", type=float, default=0.92)
-    parser.add_argument("--num_generations", type=int, default=6)
+    parser.add_argument("--num_generations", type=int, default=2)
     parser.add_argument("--per_device_train_batch_size", type=int, default=8)
     parser.add_argument("--dataset_size", type=int, default=64)
     parser.add_argument("--lora_r", type=int, default=16)

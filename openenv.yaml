@@ -6,133 +6,133 @@ app: server.app:app
 port: 7860
 version: 1.1.0
 description: >
-	Deterministic OpenEnv environment simulating production incident response for
-	a six-service microservice stack. The agent plays the on-call SRE and must
-	diagnose failures, apply safe remediations, and recover service health under
-	operational constraints.
+  Deterministic OpenEnv environment simulating production incident response for
+  a six-service microservice stack. The agent plays the on-call SRE and must
+  diagnose failures, apply safe remediations, and recover service health under
+  operational constraints.
 
 tasks:
-	- id: easy
-		name: The Detective
-		difficulty: easy
-		description: Identify root cause and restore the primary failed service
-		max_steps: 15
-	- id: medium
-		name: The First Responder
-		difficulty: medium
-		description: Recover all system signals during coupled service degradation
-		max_steps: 15
-	- id: hard
-		name: The Architect
-		difficulty: hard
-		description: Diagnose and fix a db-proxy configuration regression
-		max_steps: 20
-	- id: expert
-		name: The Storm Chaser
-		difficulty: expert
-		description: Resolve a cache to db cascade in the correct intervention order
-		max_steps: 25
-	- id: enterprise
-		name: Enterprise Incident Commander
-		difficulty: expert
-		description: Execute PagerDuty -> Slack -> Infra -> PagerDuty incident workflow
-		max_steps: 25
+  - id: easy
+    name: The Detective
+    difficulty: easy
+    description: Identify root cause and restore the primary failed service
+    max_steps: 15
+  - id: medium
+    name: The First Responder
+    difficulty: medium
+    description: Recover all system signals during coupled service degradation
+    max_steps: 15
+  - id: hard
+    name: The Architect
+    difficulty: hard
+    description: Diagnose and fix a db-proxy configuration regression
+    max_steps: 20
+  - id: expert
+    name: The Storm Chaser
+    difficulty: expert
+    description: Resolve a cache to db cascade in the correct intervention order
+    max_steps: 25
+  - id: enterprise
+    name: Enterprise Incident Commander
+    difficulty: expert
+    description: Execute PagerDuty -> Slack -> Infra -> PagerDuty incident workflow
+    max_steps: 25
 
 observation_space:
-	type: object
-	properties:
-		step:
-			type: integer
-		max_steps:
-			type: integer
-		task_id:
-			type: string
-			enum: [easy, medium, hard, expert, enterprise]
-		metrics:
-			type: object
-			description: Per-service cpu, memory, error rate, and latency metrics
-		logs:
-			type: array
-			description: Recent structured service logs
-		deploy_history:
-			type: array
-			description: Recent deployment events with config diffs
-		current_config:
-			type: object
-			description: Active runtime configuration map
-		service_graph:
-			type: object
-			description: Service dependency graph
-		active_alerts:
-			type: array
-			description: Active alerts including silenced state
-		health_summary:
-			type: object
-			description: Per-service and overall health scores in 0.0 to 1.0
-		incident_context:
-			type: object
-			description: Incident ticket context and suspected services
-		apps_state:
-			type: object
-			description: Enterprise app state (PagerDuty incidents, Slack channels/messages)
-		protocol_status:
-			type: object
-			description: Enterprise workflow flags (is_acknowledged, is_team_notified, is_resolved)
+  type: object
+  properties:
+    step:
+      type: integer
+    max_steps:
+      type: integer
+    task_id:
+      type: string
+      enum: [easy, medium, hard, expert, enterprise]
+    metrics:
+      type: object
+      description: Per-service cpu, memory, error rate, and latency metrics
+    logs:
+      type: array
+      description: Recent structured service logs
+    deploy_history:
+      type: array
+      description: Recent deployment events with config diffs
+    current_config:
+      type: object
+      description: Active runtime configuration map
+    service_graph:
+      type: object
+      description: Service dependency graph
+    active_alerts:
+      type: array
+      description: Active alerts including silenced state
+    health_summary:
+      type: object
+      description: Per-service and overall health scores in 0.0 to 1.0
+    incident_context:
+      type: object
+      description: Incident ticket context and suspected services
+    apps_state:
+      type: object
+      description: Enterprise app state (PagerDuty incidents, Slack channels/messages)
+    protocol_status:
+      type: object
+      description: Enterprise workflow flags (is_acknowledged, is_team_notified, is_resolved)
 
 action_space:
-	type: object
-	required: [action_type, target_service]
-	properties:
-		action_type:
-			type: string
-			enum:
-				[CHECK_LOGS, INSPECT_SERVICE, DRAIN_TRAFFIC, RESTART_SERVICE, SCALE_UP, SCALE_DOWN, ROLLBACK, UPDATE_CONFIG, SILENCE_ALERT, ACKNOWLEDGE_PAGERDUTY, SEND_SLACK_MESSAGE, RESOLVE_PAGERDUTY]
-		target_service:
-			type: string
-			enum: [api-gateway, auth-service, user-service, order-service, db-proxy, cache-service]
-		config_key:
-			type: string
-			nullable: true
-		config_value:
-			nullable: true
-		params:
-			type: object
-			description: Generic enterprise payload args (incident_id, channel_name, message_text)
-		incident_id:
-			type: string
-			nullable: true
-		channel_name:
-			type: string
-			nullable: true
-		message_text:
-			type: string
-			nullable: true
-		reason:
-			type: string
-			nullable: true
+  type: object
+  required: [action_type, target_service]
+  properties:
+    action_type:
+      type: string
+      enum:
+        [CHECK_LOGS, INSPECT_SERVICE, DRAIN_TRAFFIC, RESTART_SERVICE, SCALE_UP, SCALE_DOWN, ROLLBACK, UPDATE_CONFIG, SILENCE_ALERT, ACKNOWLEDGE_PAGERDUTY, SEND_SLACK_MESSAGE, RESOLVE_PAGERDUTY]
+    target_service:
+      type: string
+      enum: [api-gateway, auth-service, user-service, order-service, db-proxy, cache-service]
+    config_key:
+      type: string
+      nullable: true
+    config_value:
+      nullable: true
+    params:
+      type: object
+      description: Generic enterprise payload args (incident_id, channel_name, message_text)
+    incident_id:
+      type: string
+      nullable: true
+    channel_name:
+      type: string
+      nullable: true
+    message_text:
+      type: string
+      nullable: true
+    reason:
+      type: string
+      nullable: true
 
 reward:
-	min: -1.0
-	max: 1.0
-	description: >
-		Dense shaped reward with components for health delta, latency improvement,
-		critical-service progress, cost efficiency, invalid/repeated action
-		penalties, explicit risk penalties for disruptive actions, and enterprise
-		protocol signals (protocol_penalty, protocol_progress_bonus, completion_bonus).
+  min: -1.0
+  max: 1.0
+  description: >
+    Dense shaped reward with components for health delta, latency improvement,
+    critical-service progress, cost efficiency, invalid/repeated action
+    penalties, explicit risk penalties for disruptive actions, and enterprise
+    protocol signals (protocol_penalty, protocol_progress_bonus, completion_bonus).
 
 episode:
-	max_steps: 25
-	termination_conditions:
-		- Task-specific success criteria met
-		- Max steps reached
+  max_steps: 25
+  termination_conditions:
+    - Task-specific success criteria met
+    - Max steps reached
 
 tags:
-	- openenv
-	- sre
-	- agent-evaluation
-	- operations
-	- reinforcement-learning
+  - openenv
+  - sre
+  - agent-evaluation
+  - operations
+  - reinforcement-learning
 
 capabilities:
-	- multi_agent
-	- role_based_access_control
+  - multi_agent
+  - role_based_access_control

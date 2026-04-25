@@ -32,6 +32,11 @@ tasks:
 		difficulty: expert
 		description: Resolve a cache to db cascade in the correct intervention order
 		max_steps: 25
+	- id: enterprise
+		name: Enterprise Incident Commander
+		difficulty: expert
+		description: Execute PagerDuty -> Slack -> Infra -> PagerDuty incident workflow
+		max_steps: 25
 
 observation_space:
 	type: object
@@ -42,7 +47,7 @@ observation_space:
 			type: integer
 		task_id:
 			type: string
-			enum: [easy, medium, hard, expert]
+			enum: [easy, medium, hard, expert, enterprise]
 		metrics:
 			type: object
 			description: Per-service cpu, memory, error rate, and latency metrics
@@ -67,6 +72,12 @@ observation_space:
 		incident_context:
 			type: object
 			description: Incident ticket context and suspected services
+		apps_state:
+			type: object
+			description: Enterprise app state (PagerDuty incidents, Slack channels/messages)
+		protocol_status:
+			type: object
+			description: Enterprise workflow flags (is_acknowledged, is_team_notified, is_resolved)
 
 action_space:
 	type: object
@@ -75,7 +86,7 @@ action_space:
 		action_type:
 			type: string
 			enum:
-				[CHECK_LOGS, INSPECT_SERVICE, DRAIN_TRAFFIC, RESTART_SERVICE, SCALE_UP, SCALE_DOWN, ROLLBACK, UPDATE_CONFIG, SILENCE_ALERT]
+				[CHECK_LOGS, INSPECT_SERVICE, DRAIN_TRAFFIC, RESTART_SERVICE, SCALE_UP, SCALE_DOWN, ROLLBACK, UPDATE_CONFIG, SILENCE_ALERT, ACKNOWLEDGE_PAGERDUTY, SEND_SLACK_MESSAGE, RESOLVE_PAGERDUTY]
 		target_service:
 			type: string
 			enum: [api-gateway, auth-service, user-service, order-service, db-proxy, cache-service]
@@ -83,6 +94,18 @@ action_space:
 			type: string
 			nullable: true
 		config_value:
+			nullable: true
+		params:
+			type: object
+			description: Generic enterprise payload args (incident_id, channel_name, message_text)
+		incident_id:
+			type: string
+			nullable: true
+		channel_name:
+			type: string
+			nullable: true
+		message_text:
+			type: string
 			nullable: true
 		reason:
 			type: string
@@ -94,7 +117,8 @@ reward:
 	description: >
 		Dense shaped reward with components for health delta, latency improvement,
 		critical-service progress, cost efficiency, invalid/repeated action
-		penalties, and explicit risk penalties for disruptive actions.
+		penalties, explicit risk penalties for disruptive actions, and enterprise
+		protocol signals (protocol_penalty, protocol_progress_bonus, completion_bonus).
 
 episode:
 	max_steps: 25

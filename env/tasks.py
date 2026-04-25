@@ -30,4 +30,14 @@ TASKS = [
         ),
         "max_steps": 25,
     },
+    {
+        "id": "enterprise",
+        "name": "Enterprise Incident Commander",
+        "difficulty": "expert",
+        "description": (
+            "Run the strict enterprise workflow across PagerDuty, Slack, and infra "
+            "remediation: acknowledge, notify, fix, resolve."
+        ),
+        "max_steps": 25,
+    },
 ]

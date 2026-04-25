@@ -20,7 +20,7 @@ from typing import Any, Literal
 import requests
 from openai import OpenAI
 
-TaskId = Literal["easy", "medium", "hard", "expert"]
+TaskId = Literal["easy", "medium", "hard", "expert", "enterprise"]
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 HF_TOKEN = os.getenv("HF_TOKEN")
@@ -34,7 +34,7 @@ ENV_BASE_URL = os.getenv("OPENENV_BASE_URL", "http://127.0.0.1:7860")
 BENCHMARK_NAME = "site-reliability-server"
 DEFAULT_SEED = 42
 GLOBAL_TIMEOUT_SECONDS = 19 * 60
-TASKS: tuple[TaskId, ...] = ("easy", "medium", "hard", "expert")
+TASKS: tuple[TaskId, ...] = ("easy", "medium", "hard", "expert", "enterprise")
 CANONICAL_SCENARIOS = {
     "easy": "easy-001",
     "medium": "medium-001",
@@ -55,6 +55,8 @@ SERVICE_ORDER = (
     "db-proxy",
     "cache-service",
 )
+VALIDATOR_MIN_SCORE = 0.0001
+VALIDATOR_MAX_SCORE = 0.9999
 
 MODEL_API_KEY = OPENAI_API_KEY or HF_TOKEN
 
@@ -90,6 +92,14 @@ def format_reward(value: float) -> str:
     return f"{value:.2f}"
 
 
+def format_score(value: float) -> str:
+    return f"{clamp_validator_score(value):.4f}"
+
+
+def clamp_validator_score(value: float) -> float:
+    return round(max(VALIDATOR_MIN_SCORE, min(VALIDATOR_MAX_SCORE, float(value))), 4)
+
+
 def sanitize_text(value: str | None) -> str:
     if value is None:
         return "null"
@@ -116,10 +126,16 @@ def emit_step(step: int, action: dict[str, Any], reward: float, done: bool, erro
     )
 
 
-def emit_end(success: bool, steps: int, rewards: list[float]) -> None:
+def emit_end(
+    success: bool,
+    steps: int,
+    rewards: list[float],
+    score: float = VALIDATOR_MIN_SCORE,
+) -> None:
     rewards_payload = ",".join(format_reward(value) for value in rewards)
     print(
-        f"[END] success={bool_text(success)} steps={steps} rewards={rewards_payload}",
+        f"[END] success={bool_text(success)} steps={steps} "
+        f"score={format_score(score)} rewards={rewards_payload}",
         flush=True,
     )
 
@@ -502,6 +518,7 @@ def run_task(task_id: TaskId) -> EpisodeResult:
     obs: dict[str, Any] | None = None
     model_diagnosis: str | None = None
     rewards: list[float] = []
+    score: float = VALIDATOR_MIN_SCORE
     steps = 0
     success = False
     breakdown: dict[str, Any] = {}
@@ -544,7 +561,7 @@ def run_task(task_id: TaskId) -> EpisodeResult:
         final_state = call_env("GET", "/state")
         grader = call_env("POST", "/grader", final_state)
         breakdown = grader.get("breakdown", {})
-        score = float(grader.get("score", 0.0))
+        score = clamp_validator_score(float(grader.get("score", VALIDATOR_MIN_SCORE)))
         success = score >= 0.85
         return EpisodeResult(
             task_id=task_id,
@@ -560,7 +577,7 @@ def run_task(task_id: TaskId) -> EpisodeResult:
         return EpisodeResult(
             task_id=task_id,
             scenario_id=scenario_id,
-            score=0.0,
+            score=VALIDATOR_MIN_SCORE,
             success=False,
             steps=steps,
             rewards=rewards,
@@ -568,7 +585,7 @@ def run_task(task_id: TaskId) -> EpisodeResult:
             model_diagnosis=model_diagnosis,
         )
     finally:
-        emit_end(success, steps, rewards)
+        emit_end(success, steps, rewards, score)
 
 
 def write_scores(results: dict[str, EpisodeResult], started_at: float) -> None:
@@ -580,7 +597,7 @@ def write_scores(results: dict[str, EpisodeResult], started_at: float) -> None:
         "tasks": {
             task_id: {
                 "scenario_id": result.scenario_id,
-                "score": round(result.score, 4),
+                "score": clamp_validator_score(result.score),
                 "success": result.success,
                 "steps": result.steps,
                 "rewards": [round(value, 4) for value in result.rewards],
@@ -590,7 +607,7 @@ def write_scores(results: dict[str, EpisodeResult], started_at: float) -> None:
             for task_id, result in results.items()
         },
         "mean_score": round(
-            sum(result.score for result in results.values()) / max(len(results), 1),
+            sum(clamp_validator_score(result.score) for result in results.values()) / max(len(results), 1),
             4,
         ),
         "total_time_s": round(time.time() - started_at, 2),

@@ -1,8 +1,8 @@
 {
-  "api_base_url": "https://router.huggingface.co/v1",
+  "api_base_url": "https://api.groq.com/openai/v1",
   "benchmark": "site-reliability-server",
-  "mean_score": 0.9441,
-  "model": "Qwen/Qwen2.5-72B-Instruct",
+  "mean_score": 0.944,
+  "model": "llama-3.1-70b-versatile",
   "seed": 42,
   "tasks": {
     "easy": {
@@ -20,7 +20,7 @@
         0.0474
       ],
       "scenario_id": "easy-001",
-      "score": 0.999,
+      "score": 0.9989,
       "steps": 3,
       "success": true
     },
@@ -60,7 +60,7 @@
         0.0219
       ],
       "scenario_id": "expert-001",
-      "score": 0.9745,
+      "score": 0.9744,
       "steps": 6,
       "success": true
     },
@@ -90,7 +90,7 @@
         0.0433
       ],
       "scenario_id": "hard-001",
-      "score": 0.897,
+      "score": 0.8969,
       "steps": 6,
       "success": true
     },
@@ -149,10 +149,10 @@
         -0.0395
       ],
       "scenario_id": "medium-001",
-      "score": 0.906,
+      "score": 0.9059,
       "steps": 9,
       "success": true
     }
   },
-  "total_time_s": 0.62
+  "total_time_s": 1.33
 }

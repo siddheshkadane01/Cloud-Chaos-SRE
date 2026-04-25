@@ -1,0 +1,11 @@
+torch
+transformers
+trl
+peft
+accelerate
+requests
+tqdm
+wandb
+unsloth
+# If unsloth wheel resolution fails on your platform, install with:
+# pip install "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git"

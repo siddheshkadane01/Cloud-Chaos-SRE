@@ -513,6 +513,7 @@ def init_model(args: argparse.Namespace):
         load_in_4bit=True,
         bnb_4bit_quant_type="nf4",
         bnb_4bit_compute_dtype=torch.float16,
+        bnb_4bit_use_double_quant=True,
     )
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name,
@@ -654,11 +655,14 @@ def make_env_reward_function(
                 + ordering_penalty
             )
 
-            # Entropy penalty: avoid repeated same action per group
-            if idx > 0:
+            # Entropy penalty: avoid repeated same action per group (safe indexing)
+            if len(sampled_actions) > 1:
                 prev_action = sampled_actions[-2]
-                if prev_action.get("action_type") == action_type and prev_action.get("target_service") == action_payload.get("target_service"):
-                    shaped_reward -= 0.1
+                if (
+                    prev_action.get("action_type") == action_type
+                    and prev_action.get("target_service") == action_payload.get("target_service")
+                ):
+                    shaped_reward -= 0.12
 
             rewards.append(round(max(-1.5, min(1.5, shaped_reward)), 4))
 
@@ -688,16 +692,17 @@ def make_env_reward_function(
                 if end - start > 1:
                     group_stds.append(_safe_std(rewards[start:end]))
 
-            wandb.log(
-                {
-                    "step_reward": float(sum(rewards) / len(rewards)),
-                    "reward_std_local": global_std,
-                    "group_reward_std_mean": float(sum(group_stds) / len(group_stds)) if group_stds else 0.0,
-                    "invalid_action_rate": float(
-                        sum(1 for action in sampled_actions if not _validate_action_payload(action)) / max(len(sampled_actions), 1)
-                    ),
-                }
-            )
+            if random.random() < 0.3:
+                wandb.log(
+                    {
+                        "step_reward": float(sum(rewards) / len(rewards)),
+                        "reward_std_local": global_std,
+                        "group_reward_std_mean": float(sum(group_stds) / len(group_stds)) if group_stds else 0.0,
+                        "invalid_action_rate": float(
+                            sum(1 for action in sampled_actions if not _validate_action_payload(action)) / max(len(sampled_actions), 1)
+                        ),
+                    }
+                )
 
             # Mandatory variance debug: show rewards for several samples from same state.
             if len(prompts) > 0 and group_n >= 4:
@@ -790,17 +795,19 @@ def train(args: argparse.Namespace) -> None:
     random.shuffle(obs_templates)
 
     # Ensure num_generations is valid for GRPO constraints
-    batch_size = max(1, args.per_device_train_batch_size)
-    num_generations = min(args.num_generations, batch_size)
-
-    # Make sure batch_size % num_generations == 0
+    batch_size = int(args.per_device_train_batch_size)
+    num_generations = int(args.num_generations)
+    
+    if num_generations < 2:
+        raise ValueError("num_generations must be >= 2 for GRPO")
     if batch_size % num_generations != 0:
-        import math
-        gcd_val = math.gcd(batch_size, num_generations)
-        num_generations = gcd_val if gcd_val > 0 else 1
+        raise ValueError(
+            f"Invalid config: batch_size ({batch_size}) must be divisible by num_generations ({num_generations})"
+        )
 
     print("[DEBUG] final num_generations:", num_generations)
     print("[DEBUG] batch_size:", batch_size)
+    
     train_dataset = Dataset.from_dict(
         {"prompt": [build_prompt(obs) for obs in obs_templates]}
     )
@@ -808,11 +815,11 @@ def train(args: argparse.Namespace) -> None:
     grpo_config = GRPOConfig(
         output_dir=args.output_dir,
         learning_rate=args.learning_rate,
-        per_device_train_batch_size=max(1, args.per_device_train_batch_size),
+        per_device_train_batch_size=batch_size,
         gradient_accumulation_steps=1,
         num_generations=num_generations,
-        max_completion_length=args.max_new_tokens,
-        max_prompt_length=args.max_prompt_length,
+        max_completion_length=min(32, args.max_new_tokens),
+        max_prompt_length=min(1024, args.max_prompt_length),
         num_train_epochs=args.epochs,
         report_to="wandb",
         logging_steps=1,
@@ -855,14 +862,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--learning_rate", type=float, default=5e-6)
     parser.add_argument("--request_timeout", type=float, default=20.0)
-    parser.add_argument("--max_new_tokens", type=int, default=128)
-    parser.add_argument("--max_prompt_length", type=int, default=2048)
+    parser.add_argument("--max_new_tokens", type=int, default=32)
+    parser.add_argument("--max_prompt_length", type=int, default=1024)
     parser.add_argument("--max_seq_length", type=int, default=2048)
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--top_p", type=float, default=0.92)
     parser.add_argument("--num_generations", type=int, default=2)
     parser.add_argument("--per_device_train_batch_size", type=int, default=8)
-    parser.add_argument("--dataset_size", type=int, default=64)
+    parser.add_argument("--dataset_size", type=int, default=32)
     parser.add_argument("--lora_r", type=int, default=16)
     parser.add_argument("--lora_alpha", type=int, default=32)
     parser.add_argument("--lora_dropout", type=float, default=0.0)

@@ -4,6 +4,7 @@ import os
 import random
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -59,6 +60,15 @@ VALID_SERVICES = {
     "cache-service",
 }
 
+TRAIN_TASKS = ("easy", "medium", "hard", "expert", "enterprise")
+TASK_SAMPLING_WEIGHTS = {
+    "easy": 3,
+    "medium": 2,
+    "hard": 2,
+    "expert": 1,
+    "enterprise": 1,
+}
+
 
 @dataclass
 class EnvStepResult:
@@ -93,10 +103,19 @@ def build_http_session(total_retries: int = 5, backoff_factor: float = 0.5) -> r
     return session
 
 
-def reset_env(session: requests.Session, env_url: str, timeout: float) -> dict[str, Any]:
+def reset_env(
+    session: requests.Session,
+    env_url: str,
+    timeout: float,
+    task_id: str = "enterprise",
+    scenario_id: str | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {"task_id": task_id}
+    if scenario_id:
+        payload["scenario_id"] = scenario_id
     response = session.post(
         f"{env_url.rstrip('/')}/reset",
-        json={"task_id": "enterprise"},
+        json=payload,
         timeout=timeout,
     )
     response.raise_for_status()
@@ -251,46 +270,21 @@ def _validate_action_payload(payload: dict[str, Any]) -> bool:
     return True
 
 
-def _protocol_adherence_scores(actions: list[dict[str, Any]]) -> list[float]:
-    scores: list[float] = []
-    is_acknowledged = False
-    is_notified = False
-    infra_done = False
-    is_resolved = False
-
-    for payload in actions:
-        action_type = payload.get("action_type")
-        reward = 0.0
-
-        if action_type in INFRA_ACTIONS and not is_acknowledged:
-            reward -= 0.2
-
-        if action_type == "ACKNOWLEDGE_PAGERDUTY":
-            if not is_acknowledged and not is_notified and not infra_done and not is_resolved:
-                is_acknowledged = True
-                reward += 0.25
-            else:
-                reward -= 0.15
-        elif action_type == "SEND_SLACK_MESSAGE":
-            if is_acknowledged and not is_notified and not is_resolved:
-                is_notified = True
-                reward += 0.25
-            else:
-                reward -= 0.2
-        elif action_type == "RESOLVE_PAGERDUTY":
-            if is_acknowledged and is_notified and infra_done and not is_resolved:
-                is_resolved = True
-                reward += 0.3
-            else:
-                reward -= 0.3
-        elif action_type in INFRA_ACTIONS:
-            if is_acknowledged and is_notified and not is_resolved and not infra_done:
-                infra_done = True
-                reward += 0.2
-
-        scores.append(round(max(-1.0, min(1.0, reward)), 4))
-
-    return scores
+def _extract_observation_from_prompt(prompt: str) -> dict[str, Any]:
+    marker = "<|im_start|>user\n"
+    start = prompt.find(marker)
+    if start == -1:
+        return {}
+    start += len(marker)
+    end = prompt.find("<|im_end|>", start)
+    if end == -1:
+        return {}
+    blob = prompt[start:end].strip()
+    try:
+        parsed = json.loads(blob)
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
 
 
 def make_format_validity_reward_function():
@@ -298,7 +292,23 @@ def make_format_validity_reward_function():
         rewards: list[float] = []
         for completion in completions:
             completion_text = _completion_to_text(completion)
-            rewards.append(0.2 if _is_json_object_response(completion_text) else -0.2)
+            json_blob = extract_json_object(completion_text)
+            if json_blob is None:
+                rewards.append(-0.35)
+                continue
+            try:
+                payload = json.loads(json_blob)
+            except json.JSONDecodeError:
+                rewards.append(-0.3)
+                continue
+            if not isinstance(payload, dict):
+                rewards.append(-0.3)
+                continue
+
+            required = int("action_type" in payload) + int("target_service" in payload)
+            extra_text_penalty = -0.05 if completion_text.strip() != json_blob.strip() else 0.0
+            score = -0.1 + required * 0.12 + extra_text_penalty
+            rewards.append(round(max(-1.0, min(1.0, score)), 4))
         return rewards
 
     return format_validity_reward
@@ -309,8 +319,18 @@ def make_action_validity_reward_function():
         rewards: list[float] = []
         for completion in completions:
             completion_text = _completion_to_text(completion)
-            payload = parse_action_output(completion_text)
-            rewards.append(0.3 if _validate_action_payload(payload) else -0.3)
+            payload, used_fallback = _parse_action_output_with_flag(completion_text)
+            if used_fallback:
+                rewards.append(-0.3)
+                continue
+
+            base = 0.15 if _validate_action_payload(payload) else -0.2
+            action_type = payload.get("action_type")
+            if action_type == "UPDATE_CONFIG":
+                base += 0.05
+            elif action_type in ENTERPRISE_ACTIONS:
+                base += 0.03
+            rewards.append(round(max(-1.0, min(1.0, base)), 4))
         return rewards
 
     return action_validity_reward
@@ -318,11 +338,46 @@ def make_action_validity_reward_function():
 
 def make_protocol_adherence_reward_function():
     def protocol_adherence_reward(prompts: list[str], completions: list[Any], **_: Any) -> list[float]:
-        actions: list[dict[str, Any]] = []
-        for completion in completions:
+        rewards: list[float] = []
+        for idx, completion in enumerate(completions):
+            prompt = prompts[idx] if idx < len(prompts) else ""
+            obs = _extract_observation_from_prompt(prompt)
+            task_id = str(obs.get("task_id", ""))
+
             completion_text = _completion_to_text(completion)
-            actions.append(parse_action_output(completion_text))
-        return _protocol_adherence_scores(actions)
+            payload, used_fallback = _parse_action_output_with_flag(completion_text)
+            action_type = payload.get("action_type")
+
+            if used_fallback:
+                rewards.append(-0.15)
+                continue
+
+            if task_id != "enterprise":
+                # Non-enterprise tasks should favor infra actions and avoid enterprise APIs.
+                if action_type in INFRA_ACTIONS:
+                    rewards.append(0.05)
+                else:
+                    rewards.append(-0.1)
+                continue
+
+            protocol = obs.get("protocol_status", {})
+            is_ack = bool(protocol.get("is_acknowledged", False))
+            is_notified = bool(protocol.get("is_team_notified", False))
+
+            reward = 0.0
+            if action_type in INFRA_ACTIONS and not is_ack:
+                reward -= 0.2
+            elif action_type == "ACKNOWLEDGE_PAGERDUTY":
+                reward += 0.25 if not is_ack else -0.1
+            elif action_type == "SEND_SLACK_MESSAGE":
+                reward += 0.25 if is_ack and not is_notified else -0.2
+            elif action_type == "RESOLVE_PAGERDUTY":
+                reward += 0.3 if is_ack and is_notified else -0.3
+            elif action_type in INFRA_ACTIONS:
+                reward += 0.1 if is_ack and is_notified else 0.0
+
+            rewards.append(round(max(-1.0, min(1.0, reward)), 4))
+        return rewards
 
     return protocol_adherence_reward
 
@@ -372,20 +427,49 @@ def init_model(args: argparse.Namespace):
     tokenizer.pad_token_id = tokenizer.eos_token_id
     tokenizer.padding_side = "left"
 
+    target_modules = _resolve_lora_target_modules(model)
+
     lora_config = LoraConfig(
         r=args.lora_r,
         lora_alpha=args.lora_alpha,
         lora_dropout=args.lora_dropout,
-        target_modules=[
-            "q_proj","k_proj","v_proj","o_proj",
-            "gate_proj","up_proj","down_proj",
-        ],
+        target_modules=target_modules,
         bias="none",
         task_type=TaskType.CAUSAL_LM,
     )
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
     return model, tokenizer
+
+
+def _resolve_lora_target_modules(model: torch.nn.Module) -> list[str]:
+    # Preference order: decoder-only chat models first, then GPT2-style fallback.
+    candidate_groups = [
+        ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+        ["c_attn", "c_proj", "c_fc"],
+        ["query_key_value", "dense", "dense_h_to_4h", "dense_4h_to_h"],
+        ["Wqkv", "out_proj", "fc1", "fc2"],
+    ]
+
+    module_names = {name.split(".")[-1] for name, _ in model.named_modules()}
+    for group in candidate_groups:
+        selected = [name for name in group if name in module_names]
+        if selected:
+            return selected
+
+    # Final fallback: pick the most frequent linear-like leaf modules.
+    linear_leaf_counts: dict[str, int] = {}
+    for name, module in model.named_modules():
+        leaf = name.split(".")[-1]
+        cls = module.__class__.__name__.lower()
+        if "linear" in cls or leaf.startswith("fc"):
+            linear_leaf_counts[leaf] = linear_leaf_counts.get(leaf, 0) + 1
+
+    if linear_leaf_counts:
+        ranked = sorted(linear_leaf_counts.items(), key=lambda item: item[1], reverse=True)
+        return [name for name, _ in ranked[:6]]
+
+    raise RuntimeError("Could not resolve LoRA target modules for the selected model architecture")
 
 
 def _completion_to_text(item: Any) -> str:
@@ -409,26 +493,43 @@ def make_env_reward_function(
     session: requests.Session,
     env_url: str,
     timeout: float,
-    max_steps: int,
 ):
-    def env_reward_func(prompts: list[str], completions: list[Any], **_: Any) -> list[float]:
+    def env_reward_func(prompts: list[str], completions: list[Any], **kwargs: Any) -> list[float]:
         rewards: list[float] = []
+        task_ids = kwargs.get("task_id")
+        scenario_ids = kwargs.get("scenario_id")
 
-        for completion in completions:
+        if not isinstance(task_ids, list):
+            task_ids = [None] * len(completions)
+        if not isinstance(scenario_ids, list):
+            scenario_ids = [None] * len(completions)
+
+        for idx, completion in enumerate(completions):
+            prompt = prompts[idx] if idx < len(prompts) else ""
+            prompt_obs = _extract_observation_from_prompt(prompt)
+            task_id = task_ids[idx] if idx < len(task_ids) else None
+            scenario_id = scenario_ids[idx] if idx < len(scenario_ids) else None
+
+            resolved_task = str(task_id or prompt_obs.get("task_id") or "enterprise")
+            if resolved_task not in TRAIN_TASKS:
+                resolved_task = "enterprise"
+            resolved_scenario = scenario_id or prompt_obs.get("scenario_id")
+
             try:
-                reset_env(session, env_url, timeout)
+                reset_env(
+                    session,
+                    env_url,
+                    timeout,
+                    task_id=resolved_task,
+                    scenario_id=resolved_scenario,
+                )
             except Exception:
                 rewards.append(-1.0)
-                wandb.log(
-                    {
-                        "step_reward": -1.0,
-                        "invalid_action_rate": 1.0,
-                    }
-                )
                 continue
 
             completion_text = _completion_to_text(completion)
             action_payload, used_fallback = _parse_action_output_with_flag(completion_text)
+            step_result: EnvStepResult | None = None
 
             try:
                 step_result = step_env(session, env_url, action_payload, timeout)
@@ -436,23 +537,96 @@ def make_env_reward_function(
             except Exception:
                 step_reward = -1.0
 
-            wandb.log(
-                {
-                    "step_reward": step_reward,
-                    "invalid_action_rate": 1.0 if used_fallback else 0.0,
-                }
-            )
-            rewards.append(step_reward)
+            if used_fallback:
+                step_reward -= 0.15
+            if step_result is not None and step_result.info.get("action_valid") is False:
+                step_reward -= 0.1
+            rewards.append(round(max(-1.0, min(1.0, step_reward)), 4))
         return rewards
 
     return env_reward_func
+
+
+def _estimate_service_health(service_state: dict[str, Any]) -> float:
+    cpu = float(service_state.get("cpu_pct", 100.0))
+    mem = float(service_state.get("mem_pct", 100.0))
+    err = float(service_state.get("error_rate", 1.0))
+    lat = float(service_state.get("latency_ms", 5000.0))
+
+    cpu_score = max(0.0, min(1.0, (70.0 - cpu) / 30.0 + 1.0))
+    mem_score = max(0.0, min(1.0, (80.0 - mem) / 20.0 + 1.0))
+    err_score = max(0.0, min(1.0, 1.0 - err / 1.0))
+    lat_score = max(0.0, min(1.0, (200.0 - lat) / 1800.0 + 1.0))
+    return round((cpu_score + mem_score + err_score + lat_score) / 4.0, 4)
+
+
+def _build_dataset_from_scenarios(max_scenarios_per_task: int) -> Dataset:
+    prompts: list[str] = []
+    task_ids: list[str] = []
+    scenario_ids: list[str] = []
+    root = Path("scenarios")
+
+    for task_id in TRAIN_TASKS:
+        scenario_paths = sorted((root / task_id).glob("*.json"))[:max_scenarios_per_task]
+        for path in scenario_paths:
+            scenario = json.loads(path.read_text())
+            initial_state = scenario.get("initial_state", {})
+            services: dict[str, dict[str, Any]] = {}
+            for service_name, metrics in initial_state.items():
+                if not isinstance(metrics, dict):
+                    continue
+                service_blob = dict(metrics)
+                service_blob["health"] = _estimate_service_health(metrics)
+                services[service_name] = service_blob
+
+            gt = scenario.get("ground_truth", {})
+            alerts = []
+            root_cause = gt.get("root_cause_service")
+            if root_cause:
+                alerts.append({"type": "ROOT_CAUSE", "service": root_cause})
+            secondary = gt.get("secondary_cause_service")
+            if secondary:
+                alerts.append({"type": "SECONDARY", "service": secondary})
+
+            observation = {
+                "task_id": task_id,
+                "scenario_id": scenario.get("scenario_id", path.stem),
+                "step": 0,
+                "services": services,
+                "alerts": alerts,
+                "current_config": scenario.get("initial_config", {}),
+                "incident_context": scenario.get("incident_context", {}),
+            }
+
+            observation["protocol_status"] = {
+                "is_acknowledged": False,
+                "is_team_notified": False,
+                "is_resolved": False,
+            }
+
+            repeat_count = TASK_SAMPLING_WEIGHTS.get(task_id, 1)
+            for _ in range(repeat_count):
+                prompts.append(build_prompt(observation))
+                task_ids.append(task_id)
+                scenario_ids.append(observation["scenario_id"])
+
+    if not prompts:
+        raise RuntimeError("No training prompts could be built from scenarios/")
+
+    return Dataset.from_dict(
+        {
+            "prompt": prompts,
+            "task_id": task_ids,
+            "scenario_id": scenario_ids,
+        }
+    )
 
 
 def train(args: argparse.Namespace) -> None:
     set_seed(args.seed)
 
     # Avoid interactive wandb login prompts during local dry-runs.
-    os.environ.setdefault("WANDB_MODE", "offline")
+    os.environ["WANDB_MODE"] = args.wandb_mode
 
     wandb.init(
         project=os.getenv("WANDB_PROJECT", "openenv-enterprise-grpo"),
@@ -466,6 +640,9 @@ def train(args: argparse.Namespace) -> None:
             "quantization": "4bit",
             "adapter": "lora",
             "algorithm": "grpo",
+            "num_generations": args.num_generations,
+            "logging_steps": args.logging_steps,
+            "wandb_mode": args.wandb_mode,
         },
     )
 
@@ -476,41 +653,12 @@ def train(args: argparse.Namespace) -> None:
         session=session,
         env_url=args.env_url,
         timeout=args.request_timeout,
-        max_steps=args.max_steps,
     )
     format_reward_fn = make_format_validity_reward_function()
     action_reward_fn = make_action_validity_reward_function()
     protocol_reward_fn = make_protocol_adherence_reward_function()
 
-    obs_templates = [
-        {"services": {"api-gateway": {"health": 0.2,
-         "latency_ms": 800, "error_rate": 0.15}},
-         "alerts": [{"type": "HIGH_LATENCY",
-         "service": "api-gateway"}], "step": 0},
-        {"services": {"db-proxy": {"health": 0.1,
-         "latency_ms": 2000, "error_rate": 0.4}},
-         "alerts": [{"type": "SERVICE_DOWN",
-         "service": "db-proxy"}], "step": 0},
-        {"services": {"auth-service": {"health": 0.5,
-         "latency_ms": 400, "error_rate": 0.08}},
-         "alerts": [{"type": "DEGRADED",
-         "service": "auth-service"}], "step": 0},
-        {"services": {"cache-service": {"health": 0.3,
-         "latency_ms": 600, "error_rate": 0.2}},
-         "alerts": [{"type": "HIGH_ERROR_RATE",
-         "service": "cache-service"}], "step": 0},
-        {"services": {"order-service": {"health": 0.0,
-         "latency_ms": 5000, "error_rate": 0.9}},
-         "alerts": [{"type": "SERVICE_DOWN",
-         "service": "order-service"}], "step": 0},
-        {"services": {"user-service": {"health": 0.6,
-         "latency_ms": 350, "error_rate": 0.05}},
-         "alerts": [{"type": "ELEVATED_LATENCY",
-         "service": "user-service"}], "step": 0},
-    ]
-    train_dataset = Dataset.from_dict(
-        {"prompt": [build_prompt(obs) for obs in obs_templates]}
-    )
+    train_dataset = _build_dataset_from_scenarios(args.max_scenarios_per_task)
 
     grpo_config = GRPOConfig(
         output_dir=args.output_dir,
@@ -521,7 +669,10 @@ def train(args: argparse.Namespace) -> None:
         max_completion_length=args.max_new_tokens,
         num_train_epochs=args.epochs,
         report_to="wandb",
-        logging_steps=1,
+        logging_steps=args.logging_steps,
+        warmup_ratio=0.05,
+        lr_scheduler_type="cosine",
+        max_grad_norm=0.5,
         bf16=False,
         fp16=True,
     )
@@ -566,7 +717,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max_seq_length", type=int, default=2048)
     parser.add_argument("--temperature", type=float, default=0.7)
     parser.add_argument("--top_p", type=float, default=0.9)
-    parser.add_argument("--num_generations", type=int, default=2)
+    parser.add_argument("--num_generations", type=int, default=8)
+    parser.add_argument("--max_scenarios_per_task", type=int, default=10)
+    parser.add_argument("--logging_steps", type=int, default=10)
+    parser.add_argument("--wandb_mode", type=str, default="offline", choices=["offline", "online", "disabled"])
     parser.add_argument("--lora_r", type=int, default=16)
     parser.add_argument("--lora_alpha", type=int, default=32)
     parser.add_argument("--lora_dropout", type=float, default=0.0)

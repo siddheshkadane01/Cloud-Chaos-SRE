@@ -5,20 +5,20 @@
     "api-gateway": {
       "cpu_pct": 40.0,
       "mem_pct": 50.0,
-      "error_rate": 0.0246,
-      "latency_ms": 393.19
+      "error_rate": 0.001,
+      "latency_ms": 110.0
     },
     "auth-service": {
-      "cpu_pct": 95.0,
-      "mem_pct": 84.08,
-      "error_rate": 0.3587,
-      "latency_ms": 2284.34
+      "cpu_pct": 97.75,
+      "mem_pct": 96.44,
+      "error_rate": 0.4904,
+      "latency_ms": 1892.66
     },
     "user-service": {
       "cpu_pct": 42.0,
       "mem_pct": 52.0,
-      "error_rate": 0.001,
-      "latency_ms": 120.0
+      "error_rate": 0.0731,
+      "latency_ms": 444.81
     },
     "order-service": {
       "cpu_pct": 44.0,
@@ -27,10 +27,10 @@
       "latency_ms": 130.0
     },
     "db-proxy": {
-      "cpu_pct": 36.0,
-      "mem_pct": 42.0,
-      "error_rate": 0.0561,
-      "latency_ms": 348.74
+      "cpu_pct": 77.14,
+      "mem_pct": 86.46,
+      "error_rate": 0.1013,
+      "latency_ms": 585.42
     },
     "cache-service": {
       "cpu_pct": 28.0,
@@ -73,7 +73,7 @@
     "suspected_services": [
       "auth-service",
       "db-proxy",
-      "api-gateway"
+      "user-service"
     ],
     "failure_mode": "single-service degradation with noisy downstream alerts",
     "success_criteria": "Restore the primary failing service and leave the rest of the stack stable."

@@ -3,10 +3,10 @@
   "task_id": "medium",
   "initial_state": {
     "api-gateway": {
-      "cpu_pct": 91.04,
-      "mem_pct": 91.47,
-      "error_rate": 0.0968,
-      "latency_ms": 1098.2
+      "cpu_pct": 96.87,
+      "mem_pct": 87.92,
+      "error_rate": 0.1855,
+      "latency_ms": 1309.51
     },
     "auth-service": {
       "cpu_pct": 38.0,
@@ -34,9 +34,9 @@
     },
     "cache-service": {
       "cpu_pct": 28.0,
-      "mem_pct": 80.29,
-      "error_rate": 0.0679,
-      "latency_ms": 199.17
+      "mem_pct": 87.95,
+      "error_rate": 0.0874,
+      "latency_ms": 294.21
     }
   },
   "initial_config": {
@@ -59,7 +59,7 @@
       "timestamp": "2025-01-01T01:00:00Z",
       "service": "api-gateway",
       "changes": {
-        "replica_count": 1
+        "replica_count": 2
       }
     }
   ],

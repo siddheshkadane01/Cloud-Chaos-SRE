@@ -11,14 +11,14 @@
     "auth-service": {
       "cpu_pct": 38.0,
       "mem_pct": 45.0,
-      "error_rate": 0.1447,
-      "latency_ms": 522.52
+      "error_rate": 0.1532,
+      "latency_ms": 877.91
     },
     "user-service": {
       "cpu_pct": 42.0,
       "mem_pct": 52.0,
-      "error_rate": 0.1288,
-      "latency_ms": 631.28
+      "error_rate": 0.1457,
+      "latency_ms": 712.37
     },
     "order-service": {
       "cpu_pct": 44.0,
@@ -27,16 +27,16 @@
       "latency_ms": 130.0
     },
     "db-proxy": {
-      "cpu_pct": 91.48,
-      "mem_pct": 76.25,
-      "error_rate": 0.1449,
-      "latency_ms": 1234.56
+      "cpu_pct": 82.51,
+      "mem_pct": 79.07,
+      "error_rate": 0.2754,
+      "latency_ms": 1311.17
     },
     "cache-service": {
-      "cpu_pct": 95.21,
-      "mem_pct": 87.27,
-      "error_rate": 0.442,
-      "latency_ms": 1096.42
+      "cpu_pct": 86.95,
+      "mem_pct": 88.31,
+      "error_rate": 0.3922,
+      "latency_ms": 1567.33
     }
   },
   "initial_config": {
@@ -59,7 +59,7 @@
       "timestamp": "2025-01-01T00:30:00Z",
       "service": "cache-service",
       "changes": {
-        "pool_size": 4
+        "pool_size": 5
       }
     },
     {

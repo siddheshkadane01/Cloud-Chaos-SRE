@@ -75,7 +75,7 @@ class SREEnvironment:
             "notify_bonus_awarded": False,
             "completion_bonus_awarded": False,
         }
-        self._mode: str = "single_agent"
+        self._mode: Literal["single_agent", "multi_agent"] = "single_agent"
         self._multi_agent_state: dict = {}
         self._multi_agent_kpis: dict[str, float] = {}
         self._multi_agent_permissions: dict[str, set[str]] = {}
@@ -88,7 +88,7 @@ class SREEnvironment:
         seed: int | None = None,
         deterministic: bool | None = None,
         evaluation_mode: bool | None = None,
-        mode: str = "single_agent",
+        mode: Literal["single_agent", "multi_agent"] = "single_agent",
     ) -> Observation:
         scenarios = sorted((SCENARIOS_DIR / task_id).glob("*.json"))
         if not scenarios:
@@ -117,9 +117,9 @@ class SREEnvironment:
         self._init_multi_agent_state(scenario)
         self._init_enterprise_state()
         obs = self._build_observation(task_id, 0, scenario["scenario_id"])
-        self._prev_health = obs.health_summary.overall
+        self._prev_health = 0.0
         self._prev_mean_latency = sum(obs.metrics.latency_ms.values()) / max(len(obs.metrics.latency_ms), 1)
-        self._prev_service_health = dict(obs.health_summary.per_service)
+        self._prev_service_health = {service: 0.0 for service in obs.health_summary.per_service}
 
         self._state = EpisodeState(
             task_id=task_id,
@@ -221,6 +221,15 @@ class SREEnvironment:
         task_progress = (sum(service_deltas) / len(service_deltas)) if service_deltas else 0.0
         self._prev_service_health = dict(obs.health_summary.per_service)
 
+        action_changed = bool(result.get("changed", False))
+        no_op_penalty = 0.0
+        if not action_changed:
+            # Observation-only actions should not earn full progress credit.
+            health_delta *= 0.15
+            latency_delta_norm *= 0.15
+            task_progress *= 0.15
+            no_op_penalty = 0.08
+
         # SCALE_UP incurs a cloud-cost penalty (×0.10 weight)
         if action_type == "SCALE_UP":
             cost_efficiency = -0.04
@@ -229,15 +238,20 @@ class SREEnvironment:
         else:
             cost_efficiency = 0.0
 
-        # Repeated identical action on same service incurs a small penalty
+        # Repeated identical actions incur escalating penalties to discourage loops.
         repeated_action_penalty = 0.0
         if self._state.action_history:
-            last = self._state.action_history[-1]
-            if (
-                last.get("action_type") == action_type
-                and last.get("target_service") == action.target_service
-            ):
-                repeated_action_penalty = 0.05
+            repeat_streak = 0
+            for previous in reversed(self._state.action_history):
+                if (
+                    previous.get("action_type") == action_type
+                    and previous.get("target_service") == action.target_service
+                ):
+                    repeat_streak += 1
+                    continue
+                break
+            if repeat_streak > 0:
+                repeated_action_penalty = min(0.2, 0.05 * repeat_streak)
 
         invalid_penalty = 0.0 if result["valid"] else 0.25
         risk_penalty = result.get("risk_penalty", 0.0)
@@ -260,7 +274,8 @@ class SREEnvironment:
             + task_progress * 0.25
             + cost_efficiency * 0.05
             - invalid_penalty * 0.05
-            - repeated_action_penalty * 0.05
+            - repeated_action_penalty * 0.25
+            - no_op_penalty
             - risk_penalty
             + silence_bonus
             - protocol_penalty
@@ -327,7 +342,7 @@ class SREEnvironment:
                 cost_efficiency=round(cost_efficiency * 0.05, 4),
                 latency_delta=round(latency_delta_norm * 0.20, 4),
                 invalid_penalty=round(
-                    -(invalid_penalty * 0.05 + repeated_action_penalty * 0.05), 4
+                    -(invalid_penalty * 0.05 + repeated_action_penalty * 0.25 + no_op_penalty), 4
                 ),
                 risk_penalty=round(-risk_penalty, 4),
                 protocol_penalty=round(-protocol_penalty, 4),
@@ -423,6 +438,9 @@ class SREEnvironment:
         )
 
     def _task_complete(self, obs: Observation) -> bool:
+        if self._state is not None and self._state.step < 2:
+            return False
+
         task_id = obs.task_id
         open_alerts = [
             alert

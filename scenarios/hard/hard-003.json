@@ -11,26 +11,26 @@
     "auth-service": {
       "cpu_pct": 38.0,
       "mem_pct": 45.0,
-      "error_rate": 0.4358,
-      "latency_ms": 1786.91
+      "error_rate": 0.3111,
+      "latency_ms": 2087.93
     },
     "user-service": {
       "cpu_pct": 42.0,
       "mem_pct": 52.0,
-      "error_rate": 0.3239,
-      "latency_ms": 2032.33
+      "error_rate": 0.4314,
+      "latency_ms": 2204.66
     },
     "order-service": {
       "cpu_pct": 44.0,
       "mem_pct": 54.0,
-      "error_rate": 0.286,
-      "latency_ms": 2446.4
+      "error_rate": 0.416,
+      "latency_ms": 1581.29
     },
     "db-proxy": {
-      "cpu_pct": 87.59,
-      "mem_pct": 82.84,
-      "error_rate": 0.435,
-      "latency_ms": 1645.11
+      "cpu_pct": 83.43,
+      "mem_pct": 82.33,
+      "error_rate": 0.4282,
+      "latency_ms": 2415.32
     },
     "cache-service": {
       "cpu_pct": 28.0,
@@ -41,9 +41,9 @@
   },
   "initial_config": {
     "db_timeout": 100,
-    "pool_size": 9,
+    "pool_size": 8,
     "replica_count": 1,
-    "ttl": 240,
+    "ttl": 300,
     "retry_count": 1,
     "connection_pool": 4
   },
@@ -53,7 +53,7 @@
       "timestamp": "2025-01-01T00:00:00Z",
       "service": "db-proxy",
       "changes": {
-        "pool_size": 12
+        "pool_size": 10
       }
     },
     {
@@ -71,7 +71,7 @@
       "service": "db-proxy",
       "changes": {
         "connection_pool": 4,
-        "ttl": 240
+        "ttl": 300
       }
     }
   ],

@@ -31,6 +31,13 @@ BASE_CONFIG = {
     "ttl": 300,
 }
 
+HEALTH_THRESHOLDS = {
+    "cpu_pct": 70.0,
+    "mem_pct": 80.0,
+    "error_rate": 0.01,
+    "latency_ms": 200.0,
+}
+
 
 def _incident_context(
     incident_id: str,
@@ -89,21 +96,27 @@ def _make_easy(index: int) -> dict:
     config = deepcopy(BASE_CONFIG)
     root = random.choice(SERVICES)
 
-    # Root service is clearly degraded
-    state[root]["cpu_pct"] = round(random.uniform(82.0, 97.0), 2)
-    state[root]["mem_pct"] = round(random.uniform(78.0, 94.0), 2)
-    state[root]["error_rate"] = round(random.uniform(0.20, 0.55), 4)
-    state[root]["latency_ms"] = round(random.uniform(1200.0, 2500.0), 2)
+    # Root service is severely degraded to prevent near-solved episodes.
+    state[root]["cpu_pct"] = round(random.uniform(92.0, 99.0), 2)
+    state[root]["mem_pct"] = round(random.uniform(90.0, 98.0), 2)
+    state[root]["error_rate"] = round(random.uniform(0.35, 0.70), 4)
+    state[root]["latency_ms"] = round(random.uniform(1800.0, 3200.0), 2)
 
-    # 1-2 red-herring services with mild degradation (not root cause)
+    # 1-2 red-herring services with moderate degradation (not root cause).
     red_herrings = [s for s in SERVICES if s != root]
     random.shuffle(red_herrings)
-    for svc in red_herrings[: random.randint(1, 2)]:
+    secondary = red_herrings[0]
+    state[secondary]["cpu_pct"] = round(random.uniform(72.0, 85.0), 2)
+    state[secondary]["mem_pct"] = round(random.uniform(70.0, 88.0), 2)
+    state[secondary]["error_rate"] = round(random.uniform(0.06, 0.15), 4)
+    state[secondary]["latency_ms"] = round(random.uniform(400.0, 1100.0), 2)
+
+    for svc in red_herrings[1 : random.randint(1, 2) + 1]:
         state[svc]["error_rate"] = round(
-            min(0.09, state[svc]["error_rate"] + random.uniform(0.02, 0.07)), 4
+            min(0.12, state[svc]["error_rate"] + random.uniform(0.02, 0.09)), 4
         )
         state[svc]["latency_ms"] = round(
-            min(700.0, state[svc]["latency_ms"] + random.uniform(80.0, 400.0)), 2
+            min(900.0, state[svc]["latency_ms"] + random.uniform(120.0, 500.0)), 2
         )
 
     return {
@@ -119,7 +132,7 @@ def _make_easy(index: int) -> dict:
             business_service="Core platform APIs",
             customer_impact="Requests are timing out intermittently for a subset of users.",
             symptom_summary="PagerDuty fired on elevated latency and error rate after a routine service restart window.",
-            suspected_services=[root] + red_herrings[:2],
+            suspected_services=[root, secondary] + red_herrings[1:2],
             failure_mode="single-service degradation with noisy downstream alerts",
             success_criteria="Restore the primary failing service and leave the rest of the stack stable.",
         ),
@@ -130,6 +143,31 @@ def _make_easy(index: int) -> dict:
             "correct_config_value": None,
         },
     }
+
+
+def _service_health(metrics: dict) -> float:
+    cpu_score = max(0.0, min(1.0, (HEALTH_THRESHOLDS["cpu_pct"] - metrics["cpu_pct"]) / 30.0 + 1.0))
+    mem_score = max(0.0, min(1.0, (HEALTH_THRESHOLDS["mem_pct"] - metrics["mem_pct"]) / 20.0 + 1.0))
+    err_score = max(0.0, min(1.0, 1.0 - metrics["error_rate"] / 1.0))
+    lat_score = max(0.0, min(1.0, (HEALTH_THRESHOLDS["latency_ms"] - metrics["latency_ms"]) / 1800.0 + 1.0))
+    return round((cpu_score + mem_score + err_score + lat_score) / 4.0, 4)
+
+
+def _is_non_trivial(scenario: dict) -> bool:
+    state = scenario.get("initial_state", {})
+    if not state:
+        return False
+    health_values = [_service_health(metrics) for metrics in state.values()]
+    overall = sum(health_values) / len(health_values)
+    root = scenario.get("ground_truth", {}).get("root_cause_service")
+    root_health = _service_health(state[root]) if root in state else 1.0
+
+    task_id = scenario.get("task_id")
+    if task_id == "easy":
+        return overall < 0.92 and root_health < 0.65
+    if task_id == "medium":
+        return overall < 0.93 and root_health < 0.75
+    return overall < 0.94 and root_health < 0.8
 
 
 # ---------------------------------------------------------------------------
@@ -202,7 +240,8 @@ def _make_medium(index: int) -> dict:
 def _make_hard(index: int) -> dict:
     state = deepcopy(BASELINE_STATE)
     config = deepcopy(BASE_CONFIG)
-    root_key = random.choice(["db_timeout", "pool_size"])
+    # Keep scenario IDs semantically stable for tests and reproducibility.
+    root_key = "db_timeout" if index % 2 == 1 else "pool_size"
     if root_key == "db_timeout":
         config["db_timeout"] = 100
         config["pool_size"] = random.choice([7, 8, 9])
@@ -369,6 +408,10 @@ def generate_all_scenarios(seed: int = 42):
     for task, builder in generators.items():
         for idx in range(1, 11):
             scenario = builder(idx)
+            attempts = 0
+            while not _is_non_trivial(scenario) and attempts < 20:
+                scenario = builder(idx)
+                attempts += 1
             out_path = SCENARIOS_DIR / task / f"{scenario['scenario_id']}.json"
             out_path.write_text(json.dumps(scenario, indent=2))
 

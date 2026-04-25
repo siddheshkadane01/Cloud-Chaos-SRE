@@ -9,10 +9,10 @@
       "latency_ms": 110.0
     },
     "auth-service": {
-      "cpu_pct": 93.88,
-      "mem_pct": 92.11,
-      "error_rate": 0.0697,
-      "latency_ms": 1555.39
+      "cpu_pct": 95.76,
+      "mem_pct": 89.44,
+      "error_rate": 0.2107,
+      "latency_ms": 1412.71
     },
     "user-service": {
       "cpu_pct": 42.0,
@@ -35,8 +35,8 @@
     "cache-service": {
       "cpu_pct": 28.0,
       "mem_pct": 32.0,
-      "error_rate": 0.06,
-      "latency_ms": 252.78
+      "error_rate": 0.0489,
+      "latency_ms": 231.92
     }
   },
   "initial_config": {

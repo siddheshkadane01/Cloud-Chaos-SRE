@@ -132,3 +132,7 @@ tags:
 	- agent-evaluation
 	- operations
 	- reinforcement-learning
+
+capabilities:
+	- multi_agent
+	- role_based_access_control

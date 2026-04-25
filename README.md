@@ -21,13 +21,16 @@ Production-style SRE incident-response environment for training and evaluating A
 
 This benchmark mirrors practical on-call operations used in real engineering teams: triaging alerts,
 isolating root causes across service dependencies, and applying safe remediations under time pressure.
-It is useful for evaluating whether an agent can improve reliability outcomes instead of only solving abstract tasks.
+It is useful for evaluating whether an agent can improve reliability outcomes instead of only solving abstract tasks, aligning directly with Theme 3.1 (Professional Tasks) and Theme 1 (Multi-Agent Interactions).
+The same environment also supports an optional 4-role incident command workflow (`Commander`, `Investigator`, `Remediator`, `Comms`) with strict protocol tracking, handoff coordination bonuses, and role-based action gating while remaining 100% backward compatible for single-agent RL.
 
 ## Project Highlights
 
 - Real-world utility: production-style SRE incident diagnosis and remediation across dependent microservices.
 - OpenEnv compliance: typed Observation/Action/Reward models with `reset`, `step`, `state`, and `openenv.yaml`.
 - Task quality: 5 progressive tasks (`easy`, `medium`, `hard`, `expert`, `enterprise`) with deterministic programmatic graders.
+- Multi-agent readiness: optional role-based ICS orchestration with protocol-aware coordination and action gating.
+- Theme alignment: built for Theme 3.1 (tool-centric enterprise workflows) with optional Theme 1 multi-agent coordination.
 - Learning quality: dense reward signal with progress terms and penalties for low-value behavior.
 - Deployment readiness: works with Docker, Hugging Face Spaces, and OpenEnv validation.
 - Infra fit: designed for `vcpu=2`, `memory=8gb`, with inference timeout bounded below 20 minutes.

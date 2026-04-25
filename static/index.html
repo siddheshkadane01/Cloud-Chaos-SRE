@@ -185,8 +185,10 @@
 <header>
   <div class="badge-row">
     <span class="badge blue">OpenEnv</span>
-    <span class="badge green">4 Tasks</span>
+    <span class="badge green">5 Tasks</span>
     <span class="badge">SRE</span>
+    <span class="badge">Theme 3.1</span>
+    <span class="badge">Theme 1</span>
     <span class="badge">Reinforcement Learning</span>
     <span class="badge">FastAPI</span>
   </div>
@@ -208,10 +210,10 @@
 
   <div class="stat-grid">
     <div class="stat-card"><div class="stat-value">6</div><div class="stat-label">Microservices</div></div>
-    <div class="stat-card"><div class="stat-value">4</div><div class="stat-label">Tasks</div></div>
-    <div class="stat-card"><div class="stat-value">40</div><div class="stat-label">Scenarios</div></div>
-    <div class="stat-card"><div class="stat-value">8</div><div class="stat-label">Action Types</div></div>
-    <div class="stat-card"><div class="stat-value">4</div><div class="stat-label">Reward Signals</div></div>
+    <div class="stat-card"><div class="stat-value">5</div><div class="stat-label">Tasks</div></div>
+    <div class="stat-card"><div class="stat-value">50</div><div class="stat-label">Scenarios</div></div>
+    <div class="stat-card"><div class="stat-value">12</div><div class="stat-label">Action Types</div></div>
+    <div class="stat-card"><div class="stat-value">9</div><div class="stat-label">Reward Components</div></div>
   </div>
 
   <div class="section-title">Tasks</div>
@@ -240,6 +242,12 @@
       <div class="task-desc">Dual-service failure: cache-service and db-proxy are both degraded. Fix order matters — wrong sequence leaves the system broken.</div>
       <div class="task-meta"><span class="pill expert">Expert</span><span>10 scenarios</span></div>
     </div>
+    <div class="task-card expert">
+      <div class="task-name">🏢 Enterprise Incident Commander</div>
+      <div class="task-id">task_id: enterprise · max 25 steps</div>
+      <div class="task-desc">Execute strict incident protocol: ACKNOWLEDGE_PAGERDUTY → SEND_SLACK_MESSAGE → RESTART_SERVICE → RESOLVE_PAGERDUTY with protocol penalties and completion bonus.</div>
+      <div class="task-meta"><span class="pill expert">Enterprise</span><span>10 scenarios</span></div>
+    </div>
   </div>
 
   <div class="section-title">Live Leaderboard</div>
@@ -266,19 +274,26 @@
 
   <div class="section-title">Quick Start</div>
   <div class="copy-block">
-    <pre><span class="highlight"># 1. Start an easy episode</span>
+    <pre><span class="highlight"># 1. Start an enterprise episode</span>
 curl -X POST /reset -H "Content-Type: application/json" \
-  -d '{"task_id": "easy"}'
+  -d '{"task_id": "enterprise"}'
 
-<span class="highlight"># 2. Check db-proxy logs</span>
+<span class="highlight"># 2. Acknowledge incident in PagerDuty</span>
 curl -X POST /step -H "Content-Type: application/json" \
-  -d '{"action_type":"CHECK_LOGS","target_service":"db-proxy","reason":"Investigating errors"}'
+  -d '{"action_type":"ACKNOWLEDGE_PAGERDUTY","target_service":"user-service","incident_id":"INC-ENT-001"}'
 
-<span class="highlight"># 3. Restart the root-cause service</span>
+<span class="highlight"># 3. Notify team in Slack</span>
 curl -X POST /step -H "Content-Type: application/json" \
-  -d '{"action_type":"RESTART_SERVICE","target_service":"db-proxy","reason":"db-proxy is root cause"}'
+  -d '{"action_type":"SEND_SLACK_MESSAGE","target_service":"user-service","incident_id":"INC-ENT-001","channel_name":"incident-response","message_text":"Incident acknowledged, remediation in progress."}'
 
-<span class="highlight"># 4. Grade the episode</span>
+<span class="highlight"># 4. Remediate the failing service</span>
+curl -X POST /step -H "Content-Type: application/json" \
+  -d '{"action_type":"RESTART_SERVICE","target_service":"user-service"}'
+
+<span class="highlight"># 5. Resolve incident and grade the episode</span>
+curl -X POST /step -H "Content-Type: application/json" \
+  -d '{"action_type":"RESOLVE_PAGERDUTY","target_service":"user-service","incident_id":"INC-ENT-001"}'
+
 curl -X POST /grader -H "Content-Type: application/json" -d "$(curl -s /state)"</pre>
   </div>
 
@@ -295,8 +310,14 @@ curl -X POST /grader -H "Content-Type: application/json" -d "$(curl -s /state)"<
       const res = await fetch('/metrics');
       const data = await res.json();
       const lb = data.leaderboard || {};
-      const tasks = ['easy','medium','hard','expert'];
-      const labels = { easy:'🔍 easy', medium:'🚨 medium', hard:'🏗️ hard', expert:'🌪️ expert' };
+      const tasks = ['easy','medium','hard','expert','enterprise'];
+      const labels = {
+        easy:'🔍 easy',
+        medium:'🚨 medium',
+        hard:'🏗️ hard',
+        expert:'🌪️ expert',
+        enterprise:'🏢 enterprise'
+      };
 
       if (!Object.keys(lb).length) {
         document.getElementById('lb-rows').innerHTML =

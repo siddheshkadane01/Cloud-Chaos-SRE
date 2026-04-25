@@ -20,7 +20,7 @@ from typing import Any, Literal
 import requests
 from openai import OpenAI
 
-TaskId = Literal["easy", "medium", "hard", "expert"]
+TaskId = Literal["easy", "medium", "hard", "expert", "enterprise"]
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 HF_TOKEN = os.getenv("HF_TOKEN")
@@ -34,7 +34,7 @@ ENV_BASE_URL = os.getenv("OPENENV_BASE_URL", "http://127.0.0.1:7860")
 BENCHMARK_NAME = "site-reliability-server"
 DEFAULT_SEED = 42
 GLOBAL_TIMEOUT_SECONDS = 19 * 60
-TASKS: tuple[TaskId, ...] = ("easy", "medium", "hard", "expert")
+TASKS: tuple[TaskId, ...] = ("easy", "medium", "hard", "expert", "enterprise")
 CANONICAL_SCENARIOS = {
     "easy": "easy-001",
     "medium": "medium-001",

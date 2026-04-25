@@ -10,11 +10,11 @@ import requests
 import torch
 import wandb
 from datasets import Dataset
+from peft import LoraConfig, TaskType, get_peft_model
 from requests.adapters import HTTPAdapter
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from urllib3.util.retry import Retry
 
-import unsloth
-from unsloth import FastLanguageModel
 from trl import GRPOConfig, GRPOTrainer
 
 ACTION_TYPES = {
@@ -342,38 +342,36 @@ def build_prompt(observation: dict[str, Any]) -> str:
     )
 
 
-def init_unsloth_model(args: argparse.Namespace):
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=args.model_name,
-        max_seq_length=args.max_seq_length,
-        dtype=None,
+def init_model(args: argparse.Namespace):
+    bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=torch.float16,
     )
-
-    model = FastLanguageModel.get_peft_model(
-        model,
-        r=args.lora_r,
-        target_modules=[
-            "q_proj",
-            "k_proj",
-            "v_proj",
-            "o_proj",
-            "gate_proj",
-            "up_proj",
-            "down_proj",
-        ],
-        lora_alpha=args.lora_alpha,
-        lora_dropout=args.lora_dropout,
-        bias="none",
-        use_gradient_checkpointing="unsloth",
-        random_state=args.seed,
+    model = AutoModelForCausalLM.from_pretrained(
+        args.model_name,
+        quantization_config=bnb_config,
+        device_map="auto",
     )
-
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.pad_token_id = tokenizer.eos_token_id
     tokenizer.padding_side = "left"
 
+    lora_config = LoraConfig(
+        r=args.lora_r,
+        lora_alpha=args.lora_alpha,
+        lora_dropout=args.lora_dropout,
+        target_modules=[
+            "q_proj","k_proj","v_proj","o_proj",
+            "gate_proj","up_proj","down_proj",
+        ],
+        bias="none",
+        task_type=TaskType.CAUSAL_LM,
+    )
+    model = get_peft_model(model, lora_config)
+    model.print_trainable_parameters()
     return model, tokenizer
 
 
@@ -459,7 +457,7 @@ def train(args: argparse.Namespace) -> None:
     )
 
     session = build_http_session()
-    model, tokenizer = init_unsloth_model(args)
+    model, tokenizer = init_model(args)
 
     env_reward_fn = make_env_reward_function(
         session=session,
@@ -487,7 +485,6 @@ def train(args: argparse.Namespace) -> None:
         bf16=False,
         fp16=True,
     )
-    grpo_config.unsloth_num_chunks = 1
 
     grpo_trainer = GRPOTrainer(
         model=model,

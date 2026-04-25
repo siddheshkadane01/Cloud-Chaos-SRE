@@ -13,6 +13,7 @@ from datasets import Dataset
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+import unsloth
 from unsloth import FastLanguageModel
 
 from trl.trainer.grpo_config import GRPOConfig
@@ -439,12 +440,6 @@ def make_env_reward_function(
 
 
 def train(args: argparse.Namespace) -> None:
-    import inspect
-    from trl.trainer.grpo_config import GRPOConfig as _GRPOConfig
-
-    valid_params = inspect.signature(_GRPOConfig).parameters
-    print("GRPOConfig accepts:", list(valid_params.keys()))
-
     set_seed(args.seed)
 
     # Avoid interactive wandb login prompts during local dry-runs.

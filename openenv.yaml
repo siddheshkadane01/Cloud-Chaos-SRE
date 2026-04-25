@@ -72,6 +72,12 @@ observation_space:
 		incident_context:
 			type: object
 			description: Incident ticket context and suspected services
+		apps_state:
+			type: object
+			description: Enterprise app state (PagerDuty incidents, Slack channels/messages)
+		protocol_status:
+			type: object
+			description: Enterprise workflow flags (is_acknowledged, is_team_notified, is_resolved)
 
 action_space:
 	type: object
@@ -89,6 +95,18 @@ action_space:
 			nullable: true
 		config_value:
 			nullable: true
+		params:
+			type: object
+			description: Generic enterprise payload args (incident_id, channel_name, message_text)
+		incident_id:
+			type: string
+			nullable: true
+		channel_name:
+			type: string
+			nullable: true
+		message_text:
+			type: string
+			nullable: true
 		reason:
 			type: string
 			nullable: true
@@ -99,7 +117,8 @@ reward:
 	description: >
 		Dense shaped reward with components for health delta, latency improvement,
 		critical-service progress, cost efficiency, invalid/repeated action
-		penalties, and explicit risk penalties for disruptive actions.
+		penalties, explicit risk penalties for disruptive actions, and enterprise
+		protocol signals (protocol_penalty, protocol_progress_bonus, completion_bonus).
 
 episode:
 	max_steps: 25

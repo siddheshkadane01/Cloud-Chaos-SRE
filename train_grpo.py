@@ -34,6 +34,24 @@ ACTION_TYPES = {
     "RESOLVE_PAGERDUTY",
 }
 
+INFRA_ACTIONS = {
+    "CHECK_LOGS",
+    "INSPECT_SERVICE",
+    "DRAIN_TRAFFIC",
+    "RESTART_SERVICE",
+    "SCALE_UP",
+    "SCALE_DOWN",
+    "ROLLBACK",
+    "UPDATE_CONFIG",
+    "SILENCE_ALERT",
+}
+
+ENTERPRISE_ACTIONS = {
+    "ACKNOWLEDGE_PAGERDUTY",
+    "SEND_SLACK_MESSAGE",
+    "RESOLVE_PAGERDUTY",
+}
+
 VALID_SERVICES = {
     "api-gateway",
     "auth-service",
@@ -194,6 +212,121 @@ def parse_action_output(text: str) -> dict[str, Any]:
     return action
 
 
+def _is_json_object_response(text: str) -> bool:
+    json_blob = extract_json_object(text)
+    if json_blob is None:
+        return False
+    try:
+        parsed = json.loads(json_blob)
+    except json.JSONDecodeError:
+        return False
+    return isinstance(parsed, dict)
+
+
+def _validate_action_payload(payload: dict[str, Any]) -> bool:
+    action_type = payload.get("action_type")
+    target_service = payload.get("target_service")
+    if action_type not in ACTION_TYPES:
+        return False
+    if target_service not in VALID_SERVICES:
+        return False
+
+    if action_type == "UPDATE_CONFIG":
+        if payload.get("config_key") is None or payload.get("config_value") is None:
+            return False
+
+    if action_type in {"ACKNOWLEDGE_PAGERDUTY", "RESOLVE_PAGERDUTY"}:
+        if not payload.get("incident_id") and not payload.get("params", {}).get("incident_id"):
+            return False
+
+    if action_type == "SEND_SLACK_MESSAGE":
+        channel = payload.get("channel_name") or payload.get("params", {}).get("channel_name")
+        message = payload.get("message_text") or payload.get("params", {}).get("message_text")
+        if not channel or not message:
+            return False
+
+    return True
+
+
+def _protocol_adherence_scores(actions: list[dict[str, Any]]) -> list[float]:
+    scores: list[float] = []
+    is_acknowledged = False
+    is_notified = False
+    infra_done = False
+    is_resolved = False
+
+    for payload in actions:
+        action_type = payload.get("action_type")
+        reward = 0.0
+
+        if action_type in INFRA_ACTIONS and not is_acknowledged:
+            reward -= 0.2
+
+        if action_type == "ACKNOWLEDGE_PAGERDUTY":
+            if not is_acknowledged and not is_notified and not infra_done and not is_resolved:
+                is_acknowledged = True
+                reward += 0.25
+            else:
+                reward -= 0.15
+        elif action_type == "SEND_SLACK_MESSAGE":
+            if is_acknowledged and not is_notified and not is_resolved:
+                is_notified = True
+                reward += 0.25
+            else:
+                reward -= 0.2
+        elif action_type == "RESOLVE_PAGERDUTY":
+            if is_acknowledged and is_notified and infra_done and not is_resolved:
+                is_resolved = True
+                reward += 0.3
+            else:
+                reward -= 0.3
+        elif action_type in INFRA_ACTIONS:
+            if is_acknowledged and is_notified and not is_resolved and not infra_done:
+                infra_done = True
+                reward += 0.2
+
+        scores.append(round(max(-1.0, min(1.0, reward)), 4))
+
+    return scores
+
+
+def make_format_validity_reward_function():
+    def format_validity_reward(prompts: list[str], completions: list[Any], **_: Any) -> list[float]:
+        _ = prompts
+        rewards: list[float] = []
+        for completion in completions:
+            completion_text = _completion_to_text(completion)
+            rewards.append(0.2 if _is_json_object_response(completion_text) else -0.2)
+        return rewards
+
+    return format_validity_reward
+
+
+def make_action_validity_reward_function():
+    def action_validity_reward(prompts: list[str], completions: list[Any], **_: Any) -> list[float]:
+        _ = prompts
+        rewards: list[float] = []
+        for completion in completions:
+            completion_text = _completion_to_text(completion)
+            payload = parse_action_output(completion_text)
+            rewards.append(0.3 if _validate_action_payload(payload) else -0.3)
+        return rewards
+
+    return action_validity_reward
+
+
+def make_protocol_adherence_reward_function():
+    def protocol_adherence_reward(prompts: list[str], completions: list[Any], **_: Any) -> list[float]:
+        _ = prompts
+        actions: list[dict[str, Any]] = []
+        for completion in completions:
+            completion_text = _completion_to_text(completion)
+            actions.append(parse_action_output(completion_text))
+        return _protocol_adherence_scores(actions)
+
+    return protocol_adherence_reward
+
+
 def build_prompt(observation: dict[str, Any]) -> str:
     compact_obs = json.dumps(observation, separators=(",", ":"), ensure_ascii=True)
     return (
@@ -266,17 +399,30 @@ def make_env_reward_function(
     timeout: float,
 ):
     def env_reward_func(prompts: list[str], completions: list[Any], **_: Any) -> list[float]:
+        _ = prompts
         rewards: list[float] = []
-        for prompt, completion in zip(prompts, completions):
-            _ = prompt
+        episode_active = False
+        episode_done = False
+
+        for completion in completions:
             completion_text = _completion_to_text(completion)
             action_payload = parse_action_output(completion_text)
+
+            if episode_done:
+                rewards.append(-0.05)
+                continue
+
             try:
-                reset_env(session, env_url, timeout)
+                if not episode_active:
+                    reset_env(session, env_url, timeout)
+                    episode_active = True
                 step_result = step_env(session, env_url, action_payload, timeout)
                 rewards.append(step_result.reward)
+                if step_result.done:
+                    episode_done = True
             except Exception:
                 rewards.append(-1.0)
+                episode_done = True
         return rewards
 
     return env_reward_func
@@ -306,11 +452,14 @@ def train(args: argparse.Namespace) -> None:
     session = build_http_session()
     model, tokenizer = init_unsloth_model(args)
 
-    reward_fn = make_env_reward_function(
+    env_reward_fn = make_env_reward_function(
         session=session,
         env_url=args.env_url,
         timeout=args.request_timeout,
     )
+    format_reward_fn = make_format_validity_reward_function()
+    action_reward_fn = make_action_validity_reward_function()
+    protocol_reward_fn = make_protocol_adherence_reward_function()
 
     # Keep a minimal bootstrap dataset; we overwrite this each epoch.
     train_dataset = Dataset.from_dict({"prompt": ["Bootstrap prompt for GRPO trainer."]})
@@ -330,7 +479,12 @@ def train(args: argparse.Namespace) -> None:
     grpo_trainer = GRPOTrainer(
         model=model,
         processing_class=tokenizer,
-        reward_funcs=reward_fn,
+        reward_funcs=[
+            env_reward_fn,
+            format_reward_fn,
+            action_reward_fn,
+            protocol_reward_fn,
+        ],
         args=grpo_config,
         train_dataset=train_dataset,
     )

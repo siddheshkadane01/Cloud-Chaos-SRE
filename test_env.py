@@ -9,7 +9,7 @@ from env.environment import SREEnvironment
 from env.models import Action, ActionType
 
 
-ALL_TASKS = ["easy", "medium", "hard", "expert"]
+ALL_TASKS = ["easy", "medium", "hard", "expert", "enterprise"]
 VALID_SERVICE = "db-proxy"
 
 

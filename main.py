@@ -38,7 +38,7 @@ _leaderboard: dict[str, list[dict]] = defaultdict(list)
 async def lifespan(app: FastAPI):
     _ = app
     scenarios_root = Path("scenarios")
-    required_tasks = ["easy", "medium", "hard", "expert"]
+    required_tasks = ["easy", "medium", "hard", "expert", "enterprise"]
     should_generate = False
 
     for task in required_tasks:

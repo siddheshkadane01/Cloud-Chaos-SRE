@@ -439,6 +439,12 @@ def make_env_reward_function(
 
 
 def train(args: argparse.Namespace) -> None:
+    import inspect
+    from trl.trainer.grpo_config import GRPOConfig as _GRPOConfig
+
+    valid_params = inspect.signature(_GRPOConfig).parameters
+    print("GRPOConfig accepts:", list(valid_params.keys()))
+
     set_seed(args.seed)
 
     # Avoid interactive wandb login prompts during local dry-runs.
@@ -476,7 +482,6 @@ def train(args: argparse.Namespace) -> None:
     train_dataset = Dataset.from_dict({"prompt": ["Bootstrap prompt for GRPO trainer."]})
 
     grpo_config = GRPOConfig(
-        output_dir=args.output_dir,
         learning_rate=args.learning_rate,
         per_device_train_batch_size=args.num_generations,
         gradient_accumulation_steps=1,
@@ -487,8 +492,8 @@ def train(args: argparse.Namespace) -> None:
         logging_steps=1,
         bf16=False,
         fp16=True,
+        output_dir=args.output_dir,
     )
-    setattr(grpo_config, "padding_value", tokenizer.pad_token_id)
 
     grpo_trainer = GRPOTrainer(
         model=model,

@@ -15,8 +15,7 @@ from urllib3.util.retry import Retry
 
 import unsloth
 from unsloth import FastLanguageModel
-from unsloth import UnslothGRPOConfig as GRPOConfig
-from unsloth import UnslothGRPOTrainer as GRPOTrainer
+from trl import GRPOConfig, GRPOTrainer
 
 ACTION_TYPES = {
     "CHECK_LOGS",
@@ -487,8 +486,8 @@ def train(args: argparse.Namespace) -> None:
         logging_steps=1,
         bf16=False,
         fp16=True,
-        unsloth_num_chunks=1,
     )
+    grpo_config.unsloth_num_chunks = 1
 
     grpo_trainer = GRPOTrainer(
         model=model,

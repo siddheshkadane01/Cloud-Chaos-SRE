@@ -798,8 +798,8 @@ def train(args: argparse.Namespace) -> None:
     batch_size = int(args.per_device_train_batch_size)
     num_generations = int(args.num_generations)
     
-    if num_generations < 2:
-        raise ValueError("num_generations must be >= 2 for GRPO")
+    if num_generations < 4:
+        raise ValueError("num_generations must be >= 4 for stable GRPO ranking")
     if batch_size % num_generations != 0:
         raise ValueError(
             f"Invalid config: batch_size ({batch_size}) must be divisible by num_generations ({num_generations})"
@@ -867,7 +867,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max_seq_length", type=int, default=2048)
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--top_p", type=float, default=0.92)
-    parser.add_argument("--num_generations", type=int, default=2)
+    parser.add_argument("--num_generations", type=int, default=6)
     parser.add_argument("--per_device_train_batch_size", type=int, default=8)
     parser.add_argument("--dataset_size", type=int, default=32)
     parser.add_argument("--lora_r", type=int, default=16)

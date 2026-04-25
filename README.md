@@ -178,13 +178,20 @@ This gives dense learning feedback instead of only end-of-episode binary success
 - `GET /metrics`
 - `GET /health`
 
+## Deliverables
+
+- Hugging Face Space: [Site-Reliability-Server](https://huggingface.co/spaces/siddheshkadane/Cloud-Chaos-SRE)
+- Training notebook: [Colab_Training_Pipeline.ipynb](./Colab_Training_Pipeline.ipynb)
+- YouTube video: [Add your public YouTube link here](https://youtube.com)
+- Medium blog: [Add your public Medium link here](https://medium.com)
+
 ## Baseline Notes
 
 - Uses OpenAI client only.
 - Reads `OPENAI_API_KEY` (preferred), `HF_TOKEN` (fallback), `API_BASE_URL`, and `MODEL_NAME` from environment.
 - Runtime limit is bounded below 20 minutes (19-minute global timeout).
 - Output written to `baseline_scores.json`.
-- Baseline currently runs canonical scenarios for `easy`, `medium`, `hard`, and `expert`.
+- Baseline currently runs canonical scenarios for `easy`, `medium`, `hard`, `expert`, and `enterprise`.
 - Reproducibility is deterministic for scenario selection and environment dynamics in evaluation mode.
 
 ## Infra Constraints
@@ -263,6 +270,12 @@ Expected signal in the server logs:
 
 For actual training on A100, switch back to:
 - `--model_name meta-llama/Meta-Llama-3-8B-Instruct`
+
+## Training Evidence
+
+![Reward Curve](./reward_curve.png)
+
+![Loss Curve](./loss_curve.png)
 
 ## Project Structure
 

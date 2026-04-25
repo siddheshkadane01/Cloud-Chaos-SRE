@@ -818,7 +818,7 @@ def train(args: argparse.Namespace) -> None:
         per_device_train_batch_size=batch_size,
         gradient_accumulation_steps=1,
         num_generations=num_generations,
-        max_completion_length=min(32, args.max_new_tokens),
+        max_completion_length=args.max_new_tokens,
         max_prompt_length=min(1024, args.max_prompt_length),
         num_train_epochs=args.epochs,
         report_to="wandb",

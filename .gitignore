@@ -15,3 +15,6 @@ build/
 dist/
 *.log
 run[0-9]*.txt
+
+# Generated training artifacts (downloaded/created at runtime in Colab)
+artifacts/

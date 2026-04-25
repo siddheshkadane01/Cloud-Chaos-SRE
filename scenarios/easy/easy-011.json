@@ -1,0 +1,70 @@
+{
+  "scenario_id": "easy-011",
+  "task_id": "easy",
+  "initial_state": {
+    "api-gateway": { "cpu_pct": 41.0, "mem_pct": 48.0, "error_rate": 0.002, "latency_ms": 120.0 },
+    "auth-service": { "cpu_pct": 39.0, "mem_pct": 44.0, "error_rate": 0.001, "latency_ms": 92.0 },
+    "user-service": { "cpu_pct": 45.0, "mem_pct": 55.0, "error_rate": 0.002, "latency_ms": 130.0 },
+    "order-service": { "cpu_pct": 46.0, "mem_pct": 58.0, "error_rate": 0.028, "latency_ms": 320.0 },
+    "db-proxy": { "cpu_pct": 38.0, "mem_pct": 43.0, "error_rate": 0.001, "latency_ms": 52.0 },
+    "cache-service": { "cpu_pct": 85.2, "mem_pct": 91.4, "error_rate": 0.301, "latency_ms": 1490.0 }
+  },
+  "initial_config": {
+    "db_timeout": 5000,
+    "pool_size": 10,
+    "replica_count": 1,
+    "ttl": 300
+  },
+  "deploy_history": [
+    {
+      "deploy_id": "d011",
+      "timestamp": "2025-01-03T00:00:00Z",
+      "service": "cache-service",
+      "changes": { "pool_size": 10 }
+    },
+    {
+      "deploy_id": "d012",
+      "timestamp": "2025-01-03T01:00:00Z",
+      "service": "cache-service",
+      "changes": { "pool_size": 7 }
+    }
+  ],
+  "incident_context": {
+    "incident_id": "INC-EASY-011",
+    "title": "Cache tier degradation with noisy downstream alarms",
+    "severity": "SEV-2",
+    "business_service": "Customer API stack",
+    "customer_impact": "Intermittent timeouts across profile and order endpoints.",
+    "symptom_summary": "Elevated p99 and HTTP 5xx after a cache node tuning change.",
+    "suspected_services": ["cache-service", "order-service", "auth-service"],
+    "failure_mode": "single-service degradation with noisy downstream alerts",
+    "success_criteria": "Restore cache-service, keep collateral actions minimal, and clean alert hygiene."
+  },
+  "ground_truth": {
+    "root_cause_service": "cache-service",
+    "correct_action": "RESTART_SERVICE",
+    "correct_config_key": null,
+    "correct_config_value": null
+  },
+  "multi_agent": {
+    "roles": ["incident_commander", "investigator", "remediator", "comms_officer"],
+    "initial_role": "incident_commander",
+    "permissions": {
+      "incident_commander": ["ACKNOWLEDGE_PAGERDUTY", "RESOLVE_PAGERDUTY", "CHECK_LOGS", "INSPECT_SERVICE"],
+      "investigator": ["CHECK_LOGS", "INSPECT_SERVICE"],
+      "remediator": ["RESTART_SERVICE", "SCALE_UP", "DRAIN_TRAFFIC", "SILENCE_ALERT"],
+      "comms_officer": ["SEND_SLACK_MESSAGE", "CHECK_LOGS", "INSPECT_SERVICE"]
+    },
+    "handoff_sequence": ["incident_commander", "investigator", "remediator", "comms_officer", "incident_commander"],
+    "role_objectives": {
+      "incident_commander": "Acknowledge and coordinate role handoffs.",
+      "investigator": "Collect signal from logs and inspections on suspected services.",
+      "remediator": "Apply minimal corrective infra action on root service.",
+      "comms_officer": "Notify stakeholders and close communication loop."
+    },
+    "collaboration_objectives": [
+      "Use valid handoffs instead of parallel conflicting actions.",
+      "Reduce redundant repeated actions on the same service."
+    ]
+  }
+}

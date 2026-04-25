@@ -1,0 +1,71 @@
+{
+  "scenario_id": "medium-011",
+  "task_id": "medium",
+  "initial_state": {
+    "api-gateway": { "cpu_pct": 66.0, "mem_pct": 72.0, "error_rate": 0.046, "latency_ms": 590.0 },
+    "auth-service": { "cpu_pct": 58.0, "mem_pct": 69.0, "error_rate": 0.021, "latency_ms": 300.0 },
+    "user-service": { "cpu_pct": 72.0, "mem_pct": 84.0, "error_rate": 0.033, "latency_ms": 410.0 },
+    "order-service": { "cpu_pct": 89.0, "mem_pct": 94.0, "error_rate": 0.12, "latency_ms": 980.0 },
+    "db-proxy": { "cpu_pct": 82.0, "mem_pct": 86.0, "error_rate": 0.081, "latency_ms": 760.0 },
+    "cache-service": { "cpu_pct": 63.0, "mem_pct": 70.0, "error_rate": 0.014, "latency_ms": 205.0 }
+  },
+  "initial_config": {
+    "db_timeout": 5000,
+    "pool_size": 8,
+    "replica_count": 1,
+    "ttl": 300
+  },
+  "deploy_history": [
+    {
+      "deploy_id": "d211",
+      "timestamp": "2025-01-05T00:00:00Z",
+      "service": "order-service",
+      "changes": { "replica_count": 1 }
+    },
+    {
+      "deploy_id": "d212",
+      "timestamp": "2025-01-05T00:35:00Z",
+      "service": "db-proxy",
+      "changes": { "pool_size": 8 }
+    }
+  ],
+  "incident_context": {
+    "incident_id": "INC-MED-011",
+    "title": "Traffic surge with db dependency pressure",
+    "severity": "SEV-2",
+    "business_service": "Order checkout flow",
+    "customer_impact": "Checkout retries and elevated timeout rates in peak regions.",
+    "symptom_summary": "Primary order-service saturation with worsening db-proxy queueing.",
+    "suspected_services": ["order-service", "db-proxy", "api-gateway"],
+    "failure_mode": "traffic surge with secondary dependency pressure",
+    "success_criteria": "Scale primary bottleneck, stabilize dependency, and avoid oscillating actions."
+  },
+  "ground_truth": {
+    "root_cause_service": "order-service",
+    "secondary_cause_service": "db-proxy",
+    "correct_action": "SCALE_UP",
+    "correct_config_key": null,
+    "correct_config_value": null
+  },
+  "multi_agent": {
+    "roles": ["incident_commander", "investigator", "remediator", "comms_officer"],
+    "initial_role": "incident_commander",
+    "permissions": {
+      "incident_commander": ["ACKNOWLEDGE_PAGERDUTY", "RESOLVE_PAGERDUTY", "INSPECT_SERVICE", "CHECK_LOGS"],
+      "investigator": ["CHECK_LOGS", "INSPECT_SERVICE"],
+      "remediator": ["SCALE_UP", "DRAIN_TRAFFIC", "RESTART_SERVICE", "SILENCE_ALERT", "UPDATE_CONFIG"],
+      "comms_officer": ["SEND_SLACK_MESSAGE", "CHECK_LOGS", "INSPECT_SERVICE"]
+    },
+    "handoff_sequence": ["incident_commander", "investigator", "remediator", "comms_officer", "incident_commander"],
+    "role_objectives": {
+      "incident_commander": "Create response plan and orchestrate handoffs.",
+      "investigator": "Validate root and secondary suspects via logs/inspect.",
+      "remediator": "Apply capacity plus stabilization actions on bottlenecks.",
+      "comms_officer": "Broadcast updates and resolution timeline."
+    },
+    "collaboration_objectives": [
+      "Reduce duplicated actions against same service and metric symptom.",
+      "Follow explicit handoff protocol before remediation."
+    ]
+  }
+}

@@ -28,6 +28,7 @@ class ResetRequest(BaseModel):
     seed: int | None = Field(default=None)
     deterministic: bool | None = Field(default=None)
     evaluation_mode: bool | None = Field(default=None)
+    mode: Literal["single_agent", "multi_agent"] = Field(default="single_agent")
 
 # In-memory leaderboard — tracks best score per task across all sessions.
 _leaderboard_lock = threading.Lock()
@@ -106,6 +107,7 @@ def reset(body: ResetRequest | None = None):
         seed=body.seed,
         deterministic=body.deterministic,
         evaluation_mode=body.evaluation_mode,
+        mode=body.mode,
     )
     return obs.model_dump()
 

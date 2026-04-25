@@ -124,6 +124,46 @@ def _enterprise_breakdown(state: EpisodeState) -> tuple[float, dict]:
     }
 
 
+def _multi_agent_breakdown(state: EpisodeState) -> tuple[float, dict]:
+    if getattr(state, "mode", "single_agent") != "multi_agent":
+        return 0.0, {
+            "multi_agent_enabled": False,
+            "collaboration_quality": 0.0,
+            "role_discipline": 0.0,
+            "coordination_component": 0.0,
+        }
+
+    kpis = getattr(state, "multi_agent_kpis", {}) or {}
+    handoff_count = float(kpis.get("handoff_count", 0.0))
+    conflict_count = float(kpis.get("conflict_count", 0.0))
+    redundant_rate = float(kpis.get("redundant_action_rate", 0.0))
+    violations = float(kpis.get("protocol_violations", 0.0))
+    consensus = float(kpis.get("time_to_consensus", 0.0))
+
+    collab = max(0.0, min(1.0,
+        0.35
+        + min(0.35, handoff_count * 0.08)
+        + min(0.30, consensus * 0.04)
+        - min(0.30, conflict_count * 0.06),
+    ))
+    discipline = max(0.0,
+        1.0 - min(0.7, violations * 0.18) - min(0.3, redundant_rate * 0.5)
+    )
+    component = round(0.08 * (0.6 * collab + 0.4 * discipline), 4)
+
+    return component, {
+        "multi_agent_enabled": True,
+        "collaboration_quality": round(collab, 4),
+        "role_discipline": round(discipline, 4),
+        "handoff_count": handoff_count,
+        "conflict_count": conflict_count,
+        "redundant_action_rate": round(redundant_rate, 4),
+        "protocol_violations": violations,
+        "time_to_consensus": consensus,
+        "coordination_component": component,
+    }
+
+
 def grade_easy(state: EpisodeState) -> tuple[float, dict]:
     """
     Task 1 — The Detective.
@@ -206,6 +246,9 @@ def grade_easy(state: EpisodeState) -> tuple[float, dict]:
     enterprise_component, enterprise = _enterprise_breakdown(state)
     score += enterprise_component
     breakdown.update(enterprise)
+    ma_component, ma_breakdown = _multi_agent_breakdown(state)
+    score += ma_component
+    breakdown.update(ma_breakdown)
     return _validator_safe_score(score), breakdown
 
 
@@ -373,6 +416,10 @@ def grade_medium(state: EpisodeState) -> tuple[float, dict]:
     score += enterprise_component
     breakdown.update(enterprise)
 
+    ma_component, ma_breakdown = _multi_agent_breakdown(state)
+    score += ma_component
+    breakdown.update(ma_breakdown)
+
     return _validator_safe_score(score), breakdown
 
 
@@ -507,6 +554,9 @@ def grade_hard(state: EpisodeState) -> tuple[float, dict]:
     enterprise_component, enterprise = _enterprise_breakdown(state)
     score += enterprise_component
     breakdown.update(enterprise)
+    ma_component, ma_breakdown = _multi_agent_breakdown(state)
+    score += ma_component
+    breakdown.update(ma_breakdown)
     return _validator_safe_score(score), breakdown
 
 
@@ -667,6 +717,9 @@ def grade_expert(state: EpisodeState) -> tuple[float, dict]:
     enterprise_component, enterprise = _enterprise_breakdown(state)
     score += enterprise_component
     breakdown.update(enterprise)
+    ma_component, ma_breakdown = _multi_agent_breakdown(state)
+    score += ma_component
+    breakdown.update(ma_breakdown)
     return _validator_safe_score(score), breakdown
 
 

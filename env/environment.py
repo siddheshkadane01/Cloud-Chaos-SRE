@@ -34,6 +34,13 @@ ENTERPRISE_ACTIONS = {
     "RESOLVE_PAGERDUTY",
 }
 
+_DEFAULT_ROLE_PERMISSIONS: dict[str, set[str]] = {
+    "incident_commander": {"ACKNOWLEDGE_PAGERDUTY", "RESOLVE_PAGERDUTY", "CHECK_LOGS", "INSPECT_SERVICE"},
+    "investigator": {"CHECK_LOGS", "INSPECT_SERVICE"},
+    "remediator": {"RESTART_SERVICE", "SCALE_UP", "SCALE_DOWN", "DRAIN_TRAFFIC", "ROLLBACK", "UPDATE_CONFIG", "SILENCE_ALERT"},
+    "comms_officer": {"SEND_SLACK_MESSAGE", "CHECK_LOGS", "INSPECT_SERVICE"},
+}
+
 
 class SREEnvironment:
     def __init__(
@@ -68,6 +75,10 @@ class SREEnvironment:
             "notify_bonus_awarded": False,
             "completion_bonus_awarded": False,
         }
+        self._mode: str = "single_agent"
+        self._multi_agent_state: dict = {}
+        self._multi_agent_kpis: dict[str, float] = {}
+        self._multi_agent_permissions: dict[str, set[str]] = {}
 
     def reset(
         self,
@@ -77,6 +88,7 @@ class SREEnvironment:
         seed: int | None = None,
         deterministic: bool | None = None,
         evaluation_mode: bool | None = None,
+        mode: str = "single_agent",
     ) -> Observation:
         scenarios = sorted((SCENARIOS_DIR / task_id).glob("*.json"))
         if not scenarios:
@@ -101,6 +113,8 @@ class SREEnvironment:
             enable_drift=not evaluation_mode,
             seed=scenario_seed,
         )
+        self._mode = mode
+        self._init_multi_agent_state(scenario)
         self._init_enterprise_state()
         obs = self._build_observation(task_id, 0, scenario["scenario_id"])
         self._prev_health = obs.health_summary.overall
@@ -117,6 +131,8 @@ class SREEnvironment:
             reward_history=[],
             cumulative_reward=0.0,
             protocol_status=dict(self._protocol_status),
+            mode=self._mode,
+            multi_agent_kpis=dict(self._multi_agent_kpis),
         )
         return obs
 
@@ -133,16 +149,38 @@ class SREEnvironment:
         incident_id = action.incident_id or action.params.get("incident_id")
         channel_name = action.channel_name or action.params.get("channel_name")
         message_text = action.message_text or action.params.get("message_text")
+        actor_role = action.actor_role
+        handoff_to = action.handoff_to
 
         protocol_penalty = 0.0
         protocol_progress_bonus = 0.0
         completion_bonus = 0.0
+        coordination_bonus = 0.0
+        coordination_penalty = 0.0
+
+        # Multi-agent protocol gate — runs before any action dispatch
+        ma_result = {"valid": True, "details": "", "bonus": 0.0, "penalty": 0.0}
+        if self._mode == "multi_agent":
+            ma_result = self._apply_multi_agent_protocol(
+                action_type=action_type,
+                actor_role=actor_role,
+                handoff_to=handoff_to,
+                target_service=action.target_service,
+            )
+            coordination_bonus += ma_result["bonus"]
+            coordination_penalty += ma_result["penalty"]
 
         if self._enterprise_enabled() and action_type in INFRA_ACTIONS:
             if not self._protocol_status.get("is_acknowledged", False):
                 protocol_penalty = 0.2
 
-        if action_type in ENTERPRISE_ACTIONS:
+        if not ma_result["valid"]:
+            result: dict = {
+                "valid": False,
+                "changed": False,
+                "details": ma_result["details"] or "multi_agent_protocol_violation",
+            }
+        elif action_type in ENTERPRISE_ACTIONS:
             result = self._apply_enterprise_action(
                 action_type=action_type,
                 incident_id=incident_id,
@@ -227,6 +265,8 @@ class SREEnvironment:
             + silence_bonus
             - protocol_penalty
             + protocol_progress_bonus
+            + coordination_bonus
+            - coordination_penalty
         )
 
         if (
@@ -254,6 +294,8 @@ class SREEnvironment:
                 "incident_id": incident_id,
                 "channel_name": channel_name,
                 "message_text": message_text,
+                "actor_role": actor_role,
+                "handoff_to": handoff_to,
                 "reason": action.reason,
                 "valid": result["valid"],
                 "silence_bonus": result.get("silence_bonus", False),
@@ -267,6 +309,8 @@ class SREEnvironment:
         )
         self._state.observation = obs
         self._state.protocol_status = dict(self._protocol_status)
+        self._state.mode = self._mode
+        self._state.multi_agent_kpis = dict(self._multi_agent_kpis)
 
         if self._enterprise_enabled():
             done = self._enterprise_episode_complete(obs) or self._state.step >= max_steps
@@ -289,6 +333,8 @@ class SREEnvironment:
                 protocol_penalty=round(-protocol_penalty, 4),
                 protocol_progress_bonus=round(protocol_progress_bonus, 4),
                 completion_bonus=round(completion_bonus, 4),
+                coordination_bonus=round(coordination_bonus, 4),
+                coordination_penalty=round(-coordination_penalty, 4),
             ),
         )
 
@@ -303,6 +349,8 @@ class SREEnvironment:
             "protocol_status": dict(self._protocol_status),
             "enterprise_enabled": self._enterprise_enabled(),
             "task_complete": done,
+            "multi_agent_mode": self._mode == "multi_agent",
+            "multi_agent_kpis": dict(self._multi_agent_kpis),
         }
         return obs, reward, done, info
 
@@ -347,6 +395,8 @@ class SREEnvironment:
             incident_context=IncidentContext(**self._vdc.scenario["incident_context"]),
             apps_state=deepcopy(self._apps_state),
             protocol_status=dict(self._protocol_status),
+            mode=self._mode,
+            collaboration_state=deepcopy(self._multi_agent_state),
         )
 
     def _scenario_seed(self, task_id: str, scenario_id: str, seed: int) -> int:
@@ -586,3 +636,106 @@ class SREEnvironment:
 
     def _enterprise_episode_complete(self, obs: Observation) -> bool:
         return self._protocol_status.get("is_resolved", False) and self._enterprise_health_complete(obs)
+
+    # ------------------------------------------------------------------
+    # Multi-agent helpers
+    # ------------------------------------------------------------------
+
+    def _init_multi_agent_state(self, scenario: dict) -> None:
+        if self._mode != "multi_agent":
+            self._multi_agent_state = {}
+            self._multi_agent_kpis = {}
+            self._multi_agent_permissions = {}
+            return
+
+        cfg = scenario.get("multi_agent", {})
+        roles: list[str] = cfg.get(
+            "roles",
+            ["incident_commander", "investigator", "remediator", "comms_officer"],
+        )
+        raw_perms: dict = cfg.get("permissions", {})
+        permissions: dict[str, set[str]] = {
+            role: set(raw_perms.get(role, _DEFAULT_ROLE_PERMISSIONS.get(role, set())))
+            for role in roles
+        }
+        self._multi_agent_permissions = permissions
+        self._multi_agent_state = {
+            "roles": roles,
+            "permissions": {r: sorted(list(a)) for r, a in permissions.items()},
+            "active_role": cfg.get("initial_role", "incident_commander"),
+            "handoff_sequence": cfg.get(
+                "handoff_sequence",
+                ["incident_commander", "investigator", "remediator", "comms_officer", "incident_commander"],
+            ),
+            "role_objectives": cfg.get("role_objectives", {}),
+        }
+        self._multi_agent_kpis = {
+            "handoff_count": 0.0,
+            "conflict_count": 0.0,
+            "redundant_action_rate": 0.0,
+            "protocol_violations": 0.0,
+            "time_to_consensus": 0.0,
+        }
+
+    def _apply_multi_agent_protocol(
+        self,
+        *,
+        action_type: str,
+        actor_role: str | None,
+        handoff_to: str | None,
+        target_service: str,
+    ) -> dict:
+        result: dict = {"valid": True, "details": "", "bonus": 0.0, "penalty": 0.0}
+        if self._mode != "multi_agent":
+            return result
+
+        active_role = self._multi_agent_state.get("active_role")
+        role = actor_role or active_role
+        permissions = self._multi_agent_permissions
+
+        if not role or role not in permissions:
+            result["valid"] = False
+            result["details"] = f"Unknown actor_role: {role!r}"
+            result["penalty"] += 0.08
+            self._multi_agent_kpis["protocol_violations"] += 1
+            return result
+
+        if role != active_role:
+            result["penalty"] += 0.03
+            self._multi_agent_kpis["conflict_count"] += 1
+
+        if action_type not in permissions[role]:
+            result["valid"] = False
+            result["details"] = f"Role '{role}' is not permitted to execute {action_type}"
+            result["penalty"] += 0.10
+            self._multi_agent_kpis["protocol_violations"] += 1
+            return result
+
+        if self._state and self._state.action_history:
+            last = self._state.action_history[-1]
+            if last.get("action_type") == action_type and last.get("target_service") == target_service:
+                result["penalty"] += 0.02
+                self._multi_agent_kpis["conflict_count"] += 1
+
+        if handoff_to:
+            if handoff_to not in permissions:
+                result["valid"] = False
+                result["details"] = f"Invalid handoff_to role: {handoff_to!r}"
+                result["penalty"] += 0.08
+                self._multi_agent_kpis["protocol_violations"] += 1
+                return result
+            self._multi_agent_state["active_role"] = handoff_to
+            self._multi_agent_kpis["handoff_count"] += 1
+            result["bonus"] += 0.03
+
+        seq: list[str] = self._multi_agent_state.get("handoff_sequence", [])
+        idx = int(self._multi_agent_kpis["time_to_consensus"])
+        if idx < len(seq) and role == seq[idx]:
+            result["bonus"] += 0.01
+            self._multi_agent_kpis["time_to_consensus"] += 1
+
+        step_count = max(self._state.step if self._state else 1, 1)
+        self._multi_agent_kpis["redundant_action_rate"] = round(
+            self._multi_agent_kpis["conflict_count"] / step_count, 4
+        )
+        return result

@@ -4,6 +4,9 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+ModeType = Literal["single_agent", "multi_agent"]
+AgentRole = Literal["incident_commander", "investigator", "remediator", "comms_officer"]
+
 
 class ActionType(str, Enum):
     CHECK_LOGS = "CHECK_LOGS"
@@ -116,6 +119,14 @@ class Observation(BaseModel):
         default_factory=dict,
         description="Current enterprise workflow flags (is_acknowledged, is_team_notified, is_resolved)",
     )
+    mode: ModeType = Field(
+        default="single_agent",
+        description="Execution mode: single_agent or multi_agent",
+    )
+    collaboration_state: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Multi-agent coordination state (active role, permissions, objectives)",
+    )
 
 
 class Action(BaseModel):
@@ -143,6 +154,14 @@ class Action(BaseModel):
     channel_name: str | None = Field(default=None, description="Slack channel for SEND_SLACK_MESSAGE")
     message_text: str | None = Field(default=None, description="Slack message content")
     reason: str | None = Field(default=None, description="Agent reasoning used by Task 1 grader")
+    actor_role: AgentRole | None = Field(
+        default=None,
+        description="Acting role in multi-agent mode",
+    )
+    handoff_to: AgentRole | None = Field(
+        default=None,
+        description="Role to hand control to after this action (multi-agent mode)",
+    )
 
 
 class RewardBreakdown(BaseModel):
@@ -157,6 +176,8 @@ class RewardBreakdown(BaseModel):
     protocol_penalty: float = Field(default=0.0, description="Penalty for breaking enterprise protocol")
     protocol_progress_bonus: float = Field(default=0.0, description="Bonus for protocol milestones")
     completion_bonus: float = Field(default=0.0, description="Bonus for successful enterprise completion")
+    coordination_bonus: float = Field(default=0.0, description="Bonus for valid handoffs/sequencing in multi-agent mode")
+    coordination_penalty: float = Field(default=0.0, description="Penalty for role violations/conflicts in multi-agent mode")
 
 
 class Reward(BaseModel):
@@ -185,5 +206,13 @@ class EpisodeState(BaseModel):
             "is_resolved": False,
         },
         description="Internal enterprise protocol flags",
+    )
+    mode: ModeType = Field(
+        default="single_agent",
+        description="Execution mode for this episode",
+    )
+    multi_agent_kpis: dict[str, float] = Field(
+        default_factory=dict,
+        description="Collaboration KPIs tracked in multi-agent mode",
     )
     grader_score: float | None = Field(default=None, description="Optional grader score")

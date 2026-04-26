@@ -13,5 +13,4 @@ venv/
 htmlcov/
 build/
 dist/
-*.log
 run[0-9]*.txt

@@ -18,8 +18,9 @@ SCENARIOS_DIR = Path(__file__).parent.parent / "scenarios"
 SCENARIO_COUNTS = {
     "easy": 200,
     "medium": 150,
-    "hard": 10,
-    "expert": 10,
+    "hard": 1,
+    "expert": 1,
+    "enterprise": 1,
 }
 
 TASK_SEED_OFFSETS = {
@@ -27,6 +28,7 @@ TASK_SEED_OFFSETS = {
     "medium": 29,
     "hard": 47,
     "expert": 71,
+    "enterprise": 89,
 }
 
 BASELINE_STATE = {
@@ -157,6 +159,7 @@ def _make_medium(index: int) -> dict:
     state = deepcopy(BASELINE_STATE)
     config = deepcopy(BASE_CONFIG)
     hotspot = random.choice(["api-gateway", "order-service", "auth-service"])
+    secondary = "cache-service"
 
     # Always degrade all four metrics on the hotspot for a genuine spike
     state[hotspot]["cpu_pct"] = round(random.uniform(88.0, 97.0), 2)
@@ -368,6 +371,114 @@ def _make_expert(index: int) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# Enterprise — Incident Commander
+# Strict workflow: acknowledge -> notify -> remediate -> resolve.
+# ---------------------------------------------------------------------------
+
+def _make_enterprise(index: int) -> dict:
+    state = deepcopy(BASELINE_STATE)
+    config = deepcopy(BASE_CONFIG)
+
+    # Keep enterprise-001 deterministic for protocol tests.
+    if index == 1:
+        root = "user-service"
+        secondary = "db-proxy"
+    else:
+        root = random.choice(["user-service", "order-service", "auth-service"])
+        secondary = "db-proxy" if root != "auth-service" else "cache-service"
+
+    state[root]["cpu_pct"] = round(random.uniform(84.0, 96.0), 2)
+    state[root]["mem_pct"] = round(random.uniform(80.0, 95.0), 2)
+    state[root]["error_rate"] = round(random.uniform(0.16, 0.42), 4)
+    state[root]["latency_ms"] = round(random.uniform(1000.0, 2200.0), 2)
+
+    state[secondary]["cpu_pct"] = round(random.uniform(62.0, 84.0), 2)
+    state[secondary]["mem_pct"] = round(random.uniform(60.0, 82.0), 2)
+    state[secondary]["error_rate"] = round(random.uniform(0.03, 0.12), 4)
+    state[secondary]["latency_ms"] = round(random.uniform(260.0, 760.0), 2)
+
+    deploy_history = _base_deploy_history(root, {"replica_count": random.choice([1, 2])})
+
+    incident_id = f"INC-ENT-{index:03d}"
+    return {
+        "scenario_id": f"enterprise-{index:03d}",
+        "task_id": "enterprise",
+        "initial_state": state,
+        "initial_config": config,
+        "deploy_history": deploy_history,
+        "incident_context": _incident_context(
+            incident_id=incident_id,
+            title=f"Enterprise incident across {root}",
+            severity="SEV-1",
+            business_service="Payments and account workflows",
+            customer_impact="Users are experiencing failed transactions and elevated 5xx responses.",
+            symptom_summary="Paging fired for sustained service degradation requiring formal incident protocol.",
+            suspected_services=[root, secondary],
+            failure_mode="protocol-gated remediation with active incident management",
+            success_criteria="Acknowledge PagerDuty, notify Slack, remediate root service, and resolve incident.",
+        ),
+        "ground_truth": {
+            "root_cause_service": root,
+            "secondary_cause_service": secondary,
+            "correct_action": "RESTART_SERVICE",
+            "correct_config_key": None,
+            "correct_config_value": None,
+        },
+        "enterprise_workflow": {
+            "enabled": True,
+            "completion_rule": {"mode": "threshold", "value": 0.94},
+            "required_sequence": [
+                "ACKNOWLEDGE_PAGERDUTY",
+                "SEND_SLACK_MESSAGE",
+                "RESTART_SERVICE",
+                "RESOLVE_PAGERDUTY",
+            ],
+        },
+        "multi_agent": {
+            "roles": [
+                "incident_commander",
+                "investigator",
+                "remediator",
+                "comms_officer",
+            ],
+            "initial_role": "incident_commander",
+            "handoff_sequence": [
+                "incident_commander",
+                "investigator",
+                "remediator",
+                "comms_officer",
+                "incident_commander",
+            ],
+            "permissions": {
+                "incident_commander": [
+                    "ACKNOWLEDGE_PAGERDUTY",
+                    "RESOLVE_PAGERDUTY",
+                    "CHECK_LOGS",
+                    "INSPECT_SERVICE",
+                ],
+                "investigator": ["CHECK_LOGS", "INSPECT_SERVICE"],
+                "remediator": [
+                    "RESTART_SERVICE",
+                    "SCALE_UP",
+                    "SCALE_DOWN",
+                    "DRAIN_TRAFFIC",
+                    "ROLLBACK",
+                    "UPDATE_CONFIG",
+                    "SILENCE_ALERT",
+                ],
+                "comms_officer": ["SEND_SLACK_MESSAGE", "CHECK_LOGS", "INSPECT_SERVICE"],
+            },
+            "role_objectives": {
+                "incident_commander": "Own incident lifecycle and state transitions.",
+                "investigator": "Collect evidence and validate root cause.",
+                "remediator": "Execute low-risk remediation actions on impacted services.",
+                "comms_officer": "Broadcast clear updates and coordination messages.",
+            },
+        },
+    }
+
+
 def _scenario_signature(scenario: dict) -> str:
     payload = {
         key: value for key, value in scenario.items() if key not in {"scenario_id"}
@@ -410,7 +521,7 @@ def _build_unique_scenario(
 
 
 def generate_all_scenarios(seed: int = 42):
-    for task in ["easy", "medium", "hard", "expert"]:
+    for task in ["easy", "medium", "hard", "expert", "enterprise"]:
         (SCENARIOS_DIR / task).mkdir(parents=True, exist_ok=True)
 
     generators = {
@@ -418,6 +529,7 @@ def generate_all_scenarios(seed: int = 42):
         "medium": _make_medium,
         "hard": _make_hard,
         "expert": _make_expert,
+        "enterprise": _make_enterprise,
     }
 
     for task, builder in generators.items():
@@ -435,5 +547,6 @@ if __name__ == "__main__":
         f"easy={SCENARIO_COUNTS['easy']}, "
         f"medium={SCENARIO_COUNTS['medium']}, "
         f"hard={SCENARIO_COUNTS['hard']}, "
-        f"expert={SCENARIO_COUNTS['expert']}"
+        f"expert={SCENARIO_COUNTS['expert']}, "
+        f"enterprise={SCENARIO_COUNTS['enterprise']}"
     )

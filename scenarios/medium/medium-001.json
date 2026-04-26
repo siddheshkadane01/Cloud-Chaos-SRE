@@ -9,10 +9,10 @@
       "latency_ms": 110.0
     },
     "auth-service": {
-      "cpu_pct": 93.48,
-      "mem_pct": 86.68,
-      "error_rate": 0.182,
-      "latency_ms": 1385.44
+      "cpu_pct": 94.06,
+      "mem_pct": 91.73,
+      "error_rate": 0.1723,
+      "latency_ms": 1342.5
     },
     "user-service": {
       "cpu_pct": 42.0,
@@ -35,8 +35,8 @@
     "cache-service": {
       "cpu_pct": 28.0,
       "mem_pct": 32.0,
-      "error_rate": 0.0589,
-      "latency_ms": 379.11
+      "error_rate": 0.0303,
+      "latency_ms": 279.6
     }
   },
   "initial_config": {
@@ -59,7 +59,7 @@
       "timestamp": "2025-01-01T01:00:00Z",
       "service": "auth-service",
       "changes": {
-        "replica_count": 1
+        "replica_count": 2
       }
     }
   ],

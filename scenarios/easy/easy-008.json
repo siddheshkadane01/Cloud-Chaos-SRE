@@ -5,8 +5,8 @@
     "api-gateway": {
       "cpu_pct": 40.0,
       "mem_pct": 50.0,
-      "error_rate": 0.001,
-      "latency_ms": 110.0
+      "error_rate": 0.0492,
+      "latency_ms": 503.45
     },
     "auth-service": {
       "cpu_pct": 38.0,
@@ -21,22 +21,22 @@
       "latency_ms": 120.0
     },
     "order-service": {
-      "cpu_pct": 44.0,
-      "mem_pct": 54.0,
-      "error_rate": 0.001,
-      "latency_ms": 130.0
+      "cpu_pct": 85.7,
+      "mem_pct": 89.52,
+      "error_rate": 0.3844,
+      "latency_ms": 1259.33
     },
     "db-proxy": {
-      "cpu_pct": 90.08,
-      "mem_pct": 89.95,
-      "error_rate": 0.35,
-      "latency_ms": 1958.59
+      "cpu_pct": 36.0,
+      "mem_pct": 42.0,
+      "error_rate": 0.001,
+      "latency_ms": 50.0
     },
     "cache-service": {
       "cpu_pct": 28.0,
       "mem_pct": 32.0,
-      "error_rate": 0.0588,
-      "latency_ms": 367.55
+      "error_rate": 0.001,
+      "latency_ms": 12.0
     }
   },
   "initial_config": {
@@ -49,7 +49,7 @@
     {
       "deploy_id": "d001",
       "timestamp": "2025-01-01T00:00:00Z",
-      "service": "db-proxy",
+      "service": "order-service",
       "changes": {
         "pool_size": 10
       }
@@ -57,29 +57,29 @@
     {
       "deploy_id": "d002",
       "timestamp": "2025-01-01T01:00:00Z",
-      "service": "db-proxy",
+      "service": "order-service",
       "changes": {
-        "pool_size": 5
+        "pool_size": 6
       }
     }
   ],
   "incident_context": {
     "incident_id": "INC-EASY-008",
-    "title": "Customer-facing latency spike traced to db-proxy",
+    "title": "Customer-facing latency spike traced to order-service",
     "severity": "SEV-2",
     "business_service": "Core platform APIs",
     "customer_impact": "Requests are timing out intermittently for a subset of users.",
     "symptom_summary": "PagerDuty fired on elevated latency and error rate after a routine service restart window.",
     "suspected_services": [
-      "db-proxy",
-      "cache-service",
-      "order-service"
+      "order-service",
+      "api-gateway",
+      "db-proxy"
     ],
     "failure_mode": "single-service degradation with noisy downstream alerts",
     "success_criteria": "Restore the primary failing service and leave the rest of the stack stable."
   },
   "ground_truth": {
-    "root_cause_service": "db-proxy",
+    "root_cause_service": "order-service",
     "correct_action": "RESTART_SERVICE",
     "correct_config_key": null,
     "correct_config_value": null

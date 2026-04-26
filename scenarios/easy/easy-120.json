@@ -1,0 +1,87 @@
+{
+  "scenario_id": "easy-120",
+  "task_id": "easy",
+  "initial_state": {
+    "api-gateway": {
+      "cpu_pct": 40.0,
+      "mem_pct": 50.0,
+      "error_rate": 0.0213,
+      "latency_ms": 304.92
+    },
+    "auth-service": {
+      "cpu_pct": 38.0,
+      "mem_pct": 45.0,
+      "error_rate": 0.001,
+      "latency_ms": 95.0
+    },
+    "user-service": {
+      "cpu_pct": 93.16,
+      "mem_pct": 84.05,
+      "error_rate": 0.26,
+      "latency_ms": 1686.33
+    },
+    "order-service": {
+      "cpu_pct": 44.0,
+      "mem_pct": 54.0,
+      "error_rate": 0.001,
+      "latency_ms": 130.0
+    },
+    "db-proxy": {
+      "cpu_pct": 36.0,
+      "mem_pct": 42.0,
+      "error_rate": 0.0483,
+      "latency_ms": 388.62
+    },
+    "cache-service": {
+      "cpu_pct": 28.0,
+      "mem_pct": 32.0,
+      "error_rate": 0.001,
+      "latency_ms": 12.0
+    }
+  },
+  "initial_config": {
+    "db_timeout": 5000,
+    "pool_size": 10,
+    "replica_count": 1,
+    "ttl": 300
+  },
+  "deploy_history": [
+    {
+      "deploy_id": "d001",
+      "timestamp": "2025-01-01T00:00:00Z",
+      "service": "user-service",
+      "changes": {
+        "pool_size": 10
+      }
+    },
+    {
+      "deploy_id": "d002",
+      "timestamp": "2025-01-01T01:00:00Z",
+      "service": "user-service",
+      "changes": {
+        "pool_size": 7
+      }
+    }
+  ],
+  "incident_context": {
+    "incident_id": "INC-EASY-120",
+    "title": "Customer-facing latency spike traced to user-service",
+    "severity": "SEV-2",
+    "business_service": "Core platform APIs",
+    "customer_impact": "Requests are timing out intermittently for a subset of users.",
+    "symptom_summary": "PagerDuty fired on elevated latency and error rate after a routine service restart window.",
+    "suspected_services": [
+      "user-service",
+      "api-gateway",
+      "db-proxy"
+    ],
+    "failure_mode": "single-service degradation with noisy downstream alerts",
+    "success_criteria": "Restore the primary failing service and leave the rest of the stack stable."
+  },
+  "ground_truth": {
+    "root_cause_service": "user-service",
+    "correct_action": "RESTART_SERVICE",
+    "correct_config_key": null,
+    "correct_config_value": null
+  }
+}

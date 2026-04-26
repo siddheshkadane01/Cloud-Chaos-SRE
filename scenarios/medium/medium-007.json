@@ -9,10 +9,10 @@
       "latency_ms": 110.0
     },
     "auth-service": {
-      "cpu_pct": 38.0,
-      "mem_pct": 45.0,
-      "error_rate": 0.001,
-      "latency_ms": 95.0
+      "cpu_pct": 92.95,
+      "mem_pct": 87.49,
+      "error_rate": 0.1654,
+      "latency_ms": 1227.84
     },
     "user-service": {
       "cpu_pct": 42.0,
@@ -21,22 +21,22 @@
       "latency_ms": 120.0
     },
     "order-service": {
-      "cpu_pct": 88.64,
-      "mem_pct": 87.62,
-      "error_rate": 0.167,
-      "latency_ms": 1092.81
+      "cpu_pct": 44.0,
+      "mem_pct": 54.0,
+      "error_rate": 0.001,
+      "latency_ms": 130.0
     },
     "db-proxy": {
-      "cpu_pct": 81.1,
+      "cpu_pct": 36.0,
       "mem_pct": 42.0,
       "error_rate": 0.001,
-      "latency_ms": 209.11
+      "latency_ms": 50.0
     },
     "cache-service": {
       "cpu_pct": 28.0,
       "mem_pct": 32.0,
-      "error_rate": 0.001,
-      "latency_ms": 12.0
+      "error_rate": 0.0559,
+      "latency_ms": 473.98
     }
   },
   "initial_config": {
@@ -49,7 +49,7 @@
     {
       "deploy_id": "d001",
       "timestamp": "2025-01-01T00:00:00Z",
-      "service": "order-service",
+      "service": "auth-service",
       "changes": {
         "pool_size": 10
       }
@@ -57,29 +57,29 @@
     {
       "deploy_id": "d002",
       "timestamp": "2025-01-01T01:00:00Z",
-      "service": "order-service",
+      "service": "auth-service",
       "changes": {
-        "replica_count": 2
+        "replica_count": 1
       }
     }
   ],
   "incident_context": {
     "incident_id": "INC-MED-007",
-    "title": "Traffic surge saturating order-service",
+    "title": "Traffic surge saturating auth-service",
     "severity": "SEV-2",
     "business_service": "Checkout and account services",
     "customer_impact": "High request latency and elevated 5xx rate during a traffic surge.",
     "symptom_summary": "Autoscaling has not reacted fast enough and a dependency is beginning to flap.",
     "suspected_services": [
-      "order-service",
-      "db-proxy"
+      "auth-service",
+      "cache-service"
     ],
     "failure_mode": "capacity pressure with dependent-service stress",
     "success_criteria": "Stabilize all service health metrics without masking the incident with unnecessary actions."
   },
   "ground_truth": {
-    "root_cause_service": "order-service",
-    "secondary_cause_service": "db-proxy",
+    "root_cause_service": "auth-service",
+    "secondary_cause_service": "cache-service",
     "correct_action": "SCALE_UP",
     "correct_config_key": null,
     "correct_config_value": null

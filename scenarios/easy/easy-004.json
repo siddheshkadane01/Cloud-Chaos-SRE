@@ -3,16 +3,16 @@
   "task_id": "easy",
   "initial_state": {
     "api-gateway": {
-      "cpu_pct": 90.28,
-      "mem_pct": 91.27,
-      "error_rate": 0.4165,
-      "latency_ms": 2320.22
+      "cpu_pct": 40.0,
+      "mem_pct": 50.0,
+      "error_rate": 0.001,
+      "latency_ms": 110.0
     },
     "auth-service": {
       "cpu_pct": 38.0,
       "mem_pct": 45.0,
-      "error_rate": 0.001,
-      "latency_ms": 95.0
+      "error_rate": 0.0345,
+      "latency_ms": 494.22
     },
     "user-service": {
       "cpu_pct": 42.0,
@@ -29,14 +29,14 @@
     "db-proxy": {
       "cpu_pct": 36.0,
       "mem_pct": 42.0,
-      "error_rate": 0.0541,
-      "latency_ms": 377.38
+      "error_rate": 0.001,
+      "latency_ms": 50.0
     },
     "cache-service": {
-      "cpu_pct": 28.0,
-      "mem_pct": 32.0,
-      "error_rate": 0.001,
-      "latency_ms": 12.0
+      "cpu_pct": 92.77,
+      "mem_pct": 89.69,
+      "error_rate": 0.372,
+      "latency_ms": 1960.75
     }
   },
   "initial_config": {
@@ -49,7 +49,7 @@
     {
       "deploy_id": "d001",
       "timestamp": "2025-01-01T00:00:00Z",
-      "service": "api-gateway",
+      "service": "cache-service",
       "changes": {
         "pool_size": 10
       }
@@ -57,29 +57,29 @@
     {
       "deploy_id": "d002",
       "timestamp": "2025-01-01T01:00:00Z",
-      "service": "api-gateway",
+      "service": "cache-service",
       "changes": {
-        "pool_size": 5
+        "pool_size": 7
       }
     }
   ],
   "incident_context": {
     "incident_id": "INC-EASY-004",
-    "title": "Customer-facing latency spike traced to api-gateway",
+    "title": "Customer-facing latency spike traced to cache-service",
     "severity": "SEV-2",
     "business_service": "Core platform APIs",
     "customer_impact": "Requests are timing out intermittently for a subset of users.",
     "symptom_summary": "PagerDuty fired on elevated latency and error rate after a routine service restart window.",
     "suspected_services": [
-      "api-gateway",
-      "db-proxy",
-      "auth-service"
+      "cache-service",
+      "auth-service",
+      "db-proxy"
     ],
     "failure_mode": "single-service degradation with noisy downstream alerts",
     "success_criteria": "Restore the primary failing service and leave the rest of the stack stable."
   },
   "ground_truth": {
-    "root_cause_service": "api-gateway",
+    "root_cause_service": "cache-service",
     "correct_action": "RESTART_SERVICE",
     "correct_config_key": null,
     "correct_config_value": null

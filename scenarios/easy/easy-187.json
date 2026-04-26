@@ -1,0 +1,87 @@
+{
+  "scenario_id": "easy-187",
+  "task_id": "easy",
+  "initial_state": {
+    "api-gateway": {
+      "cpu_pct": 40.0,
+      "mem_pct": 50.0,
+      "error_rate": 0.001,
+      "latency_ms": 110.0
+    },
+    "auth-service": {
+      "cpu_pct": 38.0,
+      "mem_pct": 45.0,
+      "error_rate": 0.0669,
+      "latency_ms": 203.85
+    },
+    "user-service": {
+      "cpu_pct": 89.96,
+      "mem_pct": 85.52,
+      "error_rate": 0.541,
+      "latency_ms": 1399.01
+    },
+    "order-service": {
+      "cpu_pct": 44.0,
+      "mem_pct": 54.0,
+      "error_rate": 0.001,
+      "latency_ms": 130.0
+    },
+    "db-proxy": {
+      "cpu_pct": 36.0,
+      "mem_pct": 42.0,
+      "error_rate": 0.001,
+      "latency_ms": 50.0
+    },
+    "cache-service": {
+      "cpu_pct": 28.0,
+      "mem_pct": 32.0,
+      "error_rate": 0.0676,
+      "latency_ms": 157.59
+    }
+  },
+  "initial_config": {
+    "db_timeout": 5000,
+    "pool_size": 10,
+    "replica_count": 1,
+    "ttl": 300
+  },
+  "deploy_history": [
+    {
+      "deploy_id": "d001",
+      "timestamp": "2025-01-01T00:00:00Z",
+      "service": "user-service",
+      "changes": {
+        "pool_size": 10
+      }
+    },
+    {
+      "deploy_id": "d002",
+      "timestamp": "2025-01-01T01:00:00Z",
+      "service": "user-service",
+      "changes": {
+        "pool_size": 6
+      }
+    }
+  ],
+  "incident_context": {
+    "incident_id": "INC-EASY-187",
+    "title": "Customer-facing latency spike traced to user-service",
+    "severity": "SEV-2",
+    "business_service": "Core platform APIs",
+    "customer_impact": "Requests are timing out intermittently for a subset of users.",
+    "symptom_summary": "PagerDuty fired on elevated latency and error rate after a routine service restart window.",
+    "suspected_services": [
+      "user-service",
+      "auth-service",
+      "cache-service"
+    ],
+    "failure_mode": "single-service degradation with noisy downstream alerts",
+    "success_criteria": "Restore the primary failing service and leave the rest of the stack stable."
+  },
+  "ground_truth": {
+    "root_cause_service": "user-service",
+    "correct_action": "RESTART_SERVICE",
+    "correct_config_key": null,
+    "correct_config_value": null
+  }
+}

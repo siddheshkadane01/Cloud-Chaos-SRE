@@ -11,8 +11,8 @@
     "auth-service": {
       "cpu_pct": 38.0,
       "mem_pct": 45.0,
-      "error_rate": 0.001,
-      "latency_ms": 95.0
+      "error_rate": 0.0537,
+      "latency_ms": 175.21
     },
     "user-service": {
       "cpu_pct": 42.0,
@@ -23,8 +23,8 @@
     "order-service": {
       "cpu_pct": 44.0,
       "mem_pct": 54.0,
-      "error_rate": 0.0225,
-      "latency_ms": 279.96
+      "error_rate": 0.001,
+      "latency_ms": 130.0
     },
     "db-proxy": {
       "cpu_pct": 36.0,
@@ -33,10 +33,10 @@
       "latency_ms": 50.0
     },
     "cache-service": {
-      "cpu_pct": 83.67,
-      "mem_pct": 89.86,
-      "error_rate": 0.2857,
-      "latency_ms": 1381.4
+      "cpu_pct": 82.41,
+      "mem_pct": 85.41,
+      "error_rate": 0.5319,
+      "latency_ms": 2354.89
     }
   },
   "initial_config": {
@@ -72,8 +72,8 @@
     "symptom_summary": "PagerDuty fired on elevated latency and error rate after a routine service restart window.",
     "suspected_services": [
       "cache-service",
-      "order-service",
-      "auth-service"
+      "auth-service",
+      "api-gateway"
     ],
     "failure_mode": "single-service degradation with noisy downstream alerts",
     "success_criteria": "Restore the primary failing service and leave the rest of the stack stable."

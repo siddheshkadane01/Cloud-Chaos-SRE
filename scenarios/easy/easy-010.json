@@ -11,14 +11,14 @@
     "auth-service": {
       "cpu_pct": 38.0,
       "mem_pct": 45.0,
-      "error_rate": 0.0645,
-      "latency_ms": 270.5
+      "error_rate": 0.001,
+      "latency_ms": 95.0
     },
     "user-service": {
-      "cpu_pct": 93.53,
-      "mem_pct": 83.44,
-      "error_rate": 0.3027,
-      "latency_ms": 1405.61
+      "cpu_pct": 82.68,
+      "mem_pct": 90.68,
+      "error_rate": 0.3995,
+      "latency_ms": 1741.5
     },
     "order-service": {
       "cpu_pct": 44.0,
@@ -29,14 +29,14 @@
     "db-proxy": {
       "cpu_pct": 36.0,
       "mem_pct": 42.0,
-      "error_rate": 0.001,
-      "latency_ms": 50.0
+      "error_rate": 0.0613,
+      "latency_ms": 240.33
     },
     "cache-service": {
       "cpu_pct": 28.0,
       "mem_pct": 32.0,
-      "error_rate": 0.001,
-      "latency_ms": 12.0
+      "error_rate": 0.0213,
+      "latency_ms": 174.96
     }
   },
   "initial_config": {
@@ -59,7 +59,7 @@
       "timestamp": "2025-01-01T01:00:00Z",
       "service": "user-service",
       "changes": {
-        "pool_size": 7
+        "pool_size": 6
       }
     }
   ],
@@ -72,7 +72,7 @@
     "symptom_summary": "PagerDuty fired on elevated latency and error rate after a routine service restart window.",
     "suspected_services": [
       "user-service",
-      "auth-service",
+      "db-proxy",
       "cache-service"
     ],
     "failure_mode": "single-service degradation with noisy downstream alerts",

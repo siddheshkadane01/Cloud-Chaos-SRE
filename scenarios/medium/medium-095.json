@@ -1,0 +1,87 @@
+{
+  "scenario_id": "medium-095",
+  "task_id": "medium",
+  "initial_state": {
+    "api-gateway": {
+      "cpu_pct": 40.0,
+      "mem_pct": 50.0,
+      "error_rate": 0.001,
+      "latency_ms": 110.0
+    },
+    "auth-service": {
+      "cpu_pct": 89.23,
+      "mem_pct": 86.76,
+      "error_rate": 0.0731,
+      "latency_ms": 1722.47
+    },
+    "user-service": {
+      "cpu_pct": 42.0,
+      "mem_pct": 52.0,
+      "error_rate": 0.001,
+      "latency_ms": 120.0
+    },
+    "order-service": {
+      "cpu_pct": 44.0,
+      "mem_pct": 54.0,
+      "error_rate": 0.001,
+      "latency_ms": 130.0
+    },
+    "db-proxy": {
+      "cpu_pct": 36.0,
+      "mem_pct": 42.0,
+      "error_rate": 0.001,
+      "latency_ms": 50.0
+    },
+    "cache-service": {
+      "cpu_pct": 28.0,
+      "mem_pct": 32.0,
+      "error_rate": 0.0592,
+      "latency_ms": 364.91
+    }
+  },
+  "initial_config": {
+    "db_timeout": 5000,
+    "pool_size": 10,
+    "replica_count": 1,
+    "ttl": 300
+  },
+  "deploy_history": [
+    {
+      "deploy_id": "d001",
+      "timestamp": "2025-01-01T00:00:00Z",
+      "service": "auth-service",
+      "changes": {
+        "pool_size": 10
+      }
+    },
+    {
+      "deploy_id": "d002",
+      "timestamp": "2025-01-01T01:00:00Z",
+      "service": "auth-service",
+      "changes": {
+        "replica_count": 2
+      }
+    }
+  ],
+  "incident_context": {
+    "incident_id": "INC-MED-095",
+    "title": "Traffic surge saturating auth-service",
+    "severity": "SEV-2",
+    "business_service": "Checkout and account services",
+    "customer_impact": "High request latency and elevated 5xx rate during a traffic surge.",
+    "symptom_summary": "Autoscaling has not reacted fast enough and a dependency is beginning to flap.",
+    "suspected_services": [
+      "auth-service",
+      "cache-service"
+    ],
+    "failure_mode": "capacity pressure with dependent-service stress",
+    "success_criteria": "Stabilize all service health metrics without masking the incident with unnecessary actions."
+  },
+  "ground_truth": {
+    "root_cause_service": "auth-service",
+    "secondary_cause_service": "cache-service",
+    "correct_action": "SCALE_UP",
+    "correct_config_key": null,
+    "correct_config_value": null
+  }
+}

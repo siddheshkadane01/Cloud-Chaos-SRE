@@ -15,6 +15,20 @@ SERVICES = [
 
 SCENARIOS_DIR = Path(__file__).parent.parent / "scenarios"
 
+SCENARIO_COUNTS = {
+    "easy": 200,
+    "medium": 150,
+    "hard": 10,
+    "expert": 10,
+}
+
+TASK_SEED_OFFSETS = {
+    "easy": 11,
+    "medium": 29,
+    "hard": 47,
+    "expert": 71,
+}
+
 BASELINE_STATE = {
     "api-gateway": {"cpu_pct": 40.0, "mem_pct": 50.0, "error_rate": 0.001, "latency_ms": 110.0},
     "auth-service": {"cpu_pct": 38.0, "mem_pct": 45.0, "error_rate": 0.001, "latency_ms": 95.0},
@@ -354,8 +368,48 @@ def _make_expert(index: int) -> dict:
     }
 
 
+def _scenario_signature(scenario: dict) -> str:
+    payload = {
+        key: value for key, value in scenario.items() if key not in {"scenario_id"}
+    }
+    incident_context = payload.get("incident_context", {})
+    if isinstance(incident_context, dict):
+        payload["incident_context"] = {
+            key: value
+            for key, value in incident_context.items()
+            if key not in {"incident_id", "title"}
+        }
+    return json.dumps(payload, sort_keys=True)
+
+
+def _build_unique_scenario(
+    task: str,
+    builder,
+    index: int,
+    seed: int,
+    seen_signatures: set[str],
+    max_retries: int = 200,
+) -> dict:
+    """Generate a scenario with unique learning content for the given task."""
+    for attempt in range(max_retries):
+        derived_seed = (
+            seed * 1_000_000
+            + TASK_SEED_OFFSETS[task] * 10_000
+            + index * 100
+            + attempt
+        )
+        random.seed(derived_seed)
+        scenario = builder(index)
+        signature = _scenario_signature(scenario)
+        if signature not in seen_signatures:
+            seen_signatures.add(signature)
+            return scenario
+    raise RuntimeError(
+        f"Could not generate unique {task} scenario for index={index} after {max_retries} retries"
+    )
+
+
 def generate_all_scenarios(seed: int = 42):
-    random.seed(seed)
     for task in ["easy", "medium", "hard", "expert"]:
         (SCENARIOS_DIR / task).mkdir(parents=True, exist_ok=True)
 
@@ -367,12 +421,19 @@ def generate_all_scenarios(seed: int = 42):
     }
 
     for task, builder in generators.items():
-        for idx in range(1, 11):
-            scenario = builder(idx)
+        seen_signatures: set[str] = set()
+        for idx in range(1, SCENARIO_COUNTS[task] + 1):
+            scenario = _build_unique_scenario(task, builder, idx, seed, seen_signatures)
             out_path = SCENARIOS_DIR / task / f"{scenario['scenario_id']}.json"
             out_path.write_text(json.dumps(scenario, indent=2))
 
 
 if __name__ == "__main__":
     generate_all_scenarios()
-    print("Generated scenarios: easy=10, medium=10, hard=10, expert=10")
+    print(
+        "Generated scenarios: "
+        f"easy={SCENARIO_COUNTS['easy']}, "
+        f"medium={SCENARIO_COUNTS['medium']}, "
+        f"hard={SCENARIO_COUNTS['hard']}, "
+        f"expert={SCENARIO_COUNTS['expert']}"
+    )

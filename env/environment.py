@@ -5,6 +5,8 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Literal
 
+from openenv.env import Env
+
 from .graders import GRADERS
 from .models import Action, DeployEvent, EpisodeState, IncidentContext, Observation, Reward, RewardBreakdown
 from .simulator import SERVICE_GRAPH, VirtualDataCentre
@@ -42,7 +44,7 @@ _DEFAULT_ROLE_PERMISSIONS: dict[str, set[str]] = {
 }
 
 
-class SREEnvironment:
+class SREEnvironment(Env):
     def __init__(
         self,
         *,
@@ -50,6 +52,8 @@ class SREEnvironment:
         evaluation_mode: bool | None = None,
         default_seed: int = 42,
     ):
+        super().__init__(name="SREEnvironment", episode_max_length=max(_MAX_STEPS.values()))
+
         if deterministic is None:
             deterministic = os.getenv("OPENENV_DETERMINISTIC", "1") != "0"
         if evaluation_mode is None:

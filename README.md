@@ -27,7 +27,7 @@ The same environment also supports an optional 4-role incident command workflow 
 ## Project Highlights
 
 - Real-world utility: production-style SRE incident diagnosis and remediation across dependent microservices.
-- OpenEnv compliance: typed Observation/Action/Reward models with `reset`, `step`, `state`, and `openenv.yaml`.
+- OpenEnv compliance: `SREEnvironment` inherits `openenv.env.Env`, with typed Observation/Action/Reward models, `reset`, `step`, `state`, and `openenv.yaml`.
 - Task quality: 5 progressive tasks (`easy`, `medium`, `hard`, `expert`, `enterprise`) with deterministic programmatic graders.
 - Multi-agent readiness: optional role-based ICS orchestration with protocol-aware coordination and action gating.
 - Theme alignment: built for Theme 3.1 (tool-centric enterprise workflows) with optional Theme 1 multi-agent coordination.
@@ -102,7 +102,7 @@ flowchart LR
 | Grading | Deterministic graders returning numeric `0.0-1.0` scores |
 | Rewards | Dense, per-step shaping with positive progress and penalties |
 | Baseline | Root-level `inference.py` using OpenAI client + env vars |
-| RL Training | `train_grpo.py` (primary) and `train_ppo.py` (legacy-compatible) |
+| RL Training | `train_grpo.py` (primary) |
 | Packaging | Dockerfile + `openenv.yaml` + local OpenEnv validation |
 | Deployment | HF Space-compatible containerized runtime |
 
@@ -223,15 +223,18 @@ curl -s -o /dev/null -w '%{http_code}' -X POST \
 # Docker build
 docker build .
 
-# Run all local checks (pytest + openenv validate + docker + baseline)
+# Run all local checks (pytest + OpenEnv contract + docker + baseline)
 ./scripts/validate-local.sh
 
-# Or run OpenEnv validation directly (path-safe)
-.venv/bin/openenv validate
+# Or run OpenEnv validation directly (local contract validator)
+.venv/bin/python scripts/validate_openenv_contract.py
 
 # Quick health check when server is running
 curl http://127.0.0.1:7860/health
 ```
+
+Note: `./scripts/validate-local.sh` runs baseline inference at the end and requires
+`OPENAI_API_KEY` (or `HF_TOKEN`) plus `API_BASE_URL` and `MODEL_NAME` to be set.
 
 These checks verify tests, OpenEnv compliance, container buildability, and baseline readiness.
 
@@ -241,7 +244,7 @@ Primary RL path for current evaluation setup:
 
 - `train_grpo.py`: GRPO trainer with Unsloth 4-bit loading and LoRA adaptation.
 - `requirements_rl.txt`: RL dependencies for GRPO/TRL workflow.
-- `train_ppo.py`: legacy PPO path kept for compatibility experiments.
+
 
 Training scripts interact with the same local FastAPI environment via `/reset` and `/step`.
 
@@ -285,8 +288,8 @@ For actual training on A100, switch back to:
 ```text
 site-reliability-server/
 ├── main.py, inference.py, openenv.yaml, Dockerfile, requirements.txt
-├── readme.md, pyproject.toml, test_env.py
-├── requirements_rl.txt, train_grpo.py, train_ppo.py
+├── README.md, pyproject.toml, test_env.py
+├── requirements_rl.txt, train_grpo.py
 ├── env/                         # core environment logic
 │   ├── models.py, environment.py, simulator.py
 │   ├── graders.py, tasks.py, data_generator.py
@@ -294,7 +297,8 @@ site-reliability-server/
 ├── scenarios/                    # task datasets
 │   ├── easy/, medium/, hard/, expert/, enterprise/
 ├── scripts/
-│   └── validate-local.sh
+│   ├── validate-local.sh
+│   └── validate_openenv_contract.py
 ├── static/                       # web landing page
 │   └── index.html
 └── server/                       # compatibility entrypoint

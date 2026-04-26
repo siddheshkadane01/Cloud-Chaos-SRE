@@ -43,7 +43,7 @@ This is not a toy. Actions have side effects, trade-offs, and partial credit —
 | 📓 Colab Training | [Colab_Training_Pipeline.ipynb](./Colab_Training_Pipeline.ipynb) |
 | 📊 W&B Training Dashboard | [openenv-enterprise-grpo](https://wandb.ai/strungpattern-pune-institute-of-computer-technology/openenv-enterprise-grpo/runs/kpwdjvm1) |
 | 🎥 Demo Video | [YouTube — Add link](https://youtube.com) |
-| 📝 Write-up / Blog | [Medium — Add link](https://medium.com) |
+| 📝 Write-up / Blog | [Medium](https://medium.com/p/7ad96bc47807?postPublishedType=initial) |
 
 ---
 
@@ -375,12 +375,3 @@ site-reliability-server/
     └── __init__.py
 ```
 
----
-
-## 🏗️ Infrastructure Constraints
-
-Designed for low-resource evaluation:
-
-- `vcpu=2`, `memory=8gb`
-- Pure in-memory simulation — no external DB required
-- Inference timeout bounded below 20 minutes

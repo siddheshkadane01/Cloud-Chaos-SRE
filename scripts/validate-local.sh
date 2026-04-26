@@ -28,7 +28,12 @@ log "Running tests"
 "$PYTHON_BIN" -m pytest -q
 
 log "Running OpenEnv validation"
-"$OPENENV_BIN" validate
+if [[ -x "$OPENENV_BIN" ]]; then
+  "$OPENENV_BIN" validate
+else
+  log "openenv CLI not found; running local contract validator"
+  "$PYTHON_BIN" scripts/validate_openenv_contract.py
+fi
 
 log "Building Docker image: $IMAGE_NAME"
 docker build -t "$IMAGE_NAME" .

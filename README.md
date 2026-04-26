@@ -40,8 +40,10 @@ This is not a toy. Actions have side effects, trade-offs, and partial credit —
 | Resource | Link |
 |---|---|
 | 🤗 HF Space | [Site-Reliability-Server](https://huggingface.co/spaces/siddheshkadane/Cloud-Chaos-SRE) |
-| 📓 Colab Training | [Colab_Training_Pipeline.ipynb](./Colab_Training_Pipeline.ipynb) |
+| 📓 Colab Training | [Open in Colab](https://colab.research.google.com/drive/1Hkh6BTqF7MR-xzO1AsyXmtk4vnEPa700?usp=sharing) |
 | 📊 W&B Training Dashboard | [openenv-enterprise-grpo](https://wandb.ai/strungpattern-pune-institute-of-computer-technology/openenv-enterprise-grpo/runs/kpwdjvm1) |
+| 📄 Evidence PDF | [Training_Evidence_Team_Powerhouse.pdf](./Training_Evidence_Team_Powerhouse.pdf) |
+| 🧾 Training Output Log | [output.log](./output.log) |
 | 🎥 Demo Video | [YouTube — Add link](https://youtube.com) |
 | 📝 Write-up / Blog | [Medium](https://medium.com/p/7ad96bc47807?postPublishedType=initial) |
 

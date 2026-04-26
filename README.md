@@ -216,7 +216,7 @@ python train_grpo.py \
     --output_dir ./artifacts/grpo-run
 ```
 
-Important: `train_grpo.py` enforces `num_generations >= 4` and requires
+Important: `train_grpo.py` enforces `num_generations >= 2` and requires
 `per_device_train_batch_size % num_generations == 0`.
 
 ### Smoke Test (1 epoch, tiny model)

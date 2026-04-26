@@ -705,7 +705,7 @@ def make_env_reward_function(
                 )
 
             # Mandatory variance debug: show rewards for several samples from same state.
-            if len(prompts) > 0 and group_n >= 4:
+            if len(prompts) > 0 and group_n >= 2:
                 for prompt_idx in range(min(2, len(prompts))):
                     start = prompt_idx * group_n
                     end = min(start + group_n, len(rewards))
@@ -798,8 +798,8 @@ def train(args: argparse.Namespace) -> None:
     batch_size = int(args.per_device_train_batch_size)
     num_generations = int(args.num_generations)
     
-    if num_generations < 4:
-        raise ValueError("num_generations must be >= 4 for stable GRPO ranking")
+    if num_generations < 2:
+        raise ValueError("num_generations must be >= 2 for stable GRPO ranking")
     if batch_size % num_generations != 0:
         raise ValueError(
             f"Invalid config: batch_size ({batch_size}) must be divisible by num_generations ({num_generations})"

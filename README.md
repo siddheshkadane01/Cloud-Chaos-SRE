@@ -44,7 +44,7 @@ This is not a toy. Actions have side effects, trade-offs, and partial credit —
 | 📊 W&B Training Dashboard | [openenv-enterprise-grpo](https://wandb.ai/strungpattern-pune-institute-of-computer-technology/openenv-enterprise-grpo/runs/kpwdjvm1) |
 | 📄 Evidence PDF | [Training_Evidence_Team_Powerhouse.pdf](./Training_Evidence_Team_Powerhouse.pdf) |
 | 🧾 Training Output Log | [output.log](./output.log) |
-| 🎥 Demo Video | [YouTube — Add link](https://youtube.com) |
+| 🎥 Demo Video | [YouTube](https://youtu.be/ilN_U9rmJ3A) |
 | 📝 Write-up / Blog | [Medium](https://medium.com/p/7ad96bc47807?postPublishedType=initial) |
 
 ---
